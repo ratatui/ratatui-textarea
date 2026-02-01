@@ -26,8 +26,7 @@ Multi-rline text editor can be easily put as part of your TUI application.
 - Multiple textarea widgets in the same screen
 
 > [!warning]
-> This is a ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed.
-
+> This is a ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed. If you need tui-rs support, consider using the original crate.
 [Documentation][doc]
 
 ## Examples
