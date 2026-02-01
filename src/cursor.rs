@@ -18,7 +18,7 @@ use std::cmp;
 pub enum CursorMove {
     /// Move cursor forward by one character. When the cursor is at the end of line, it moves to the head of next line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["abc"]);
     ///
@@ -31,7 +31,7 @@ pub enum CursorMove {
     /// Move cursor backward by one character. When the cursor is at the head of line, it moves to the end of previous
     /// line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["abc"]);
     ///
@@ -43,7 +43,7 @@ pub enum CursorMove {
     Back,
     /// Move cursor up by one line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["a", "b", "c"]);
     ///
@@ -55,7 +55,7 @@ pub enum CursorMove {
     Up,
     /// Move cursor down by one line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["a", "b", "c"]);
     ///
@@ -67,7 +67,7 @@ pub enum CursorMove {
     Down,
     /// Move cursor to the head of line. When the cursor is at the head of line, it moves to the end of previous line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["abc"]);
     ///
@@ -79,7 +79,7 @@ pub enum CursorMove {
     Head,
     /// Move cursor to the end of line. When the cursor is at the end of line, it moves to the head of next line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["abc"]);
     ///
@@ -89,7 +89,7 @@ pub enum CursorMove {
     End,
     /// Move cursor to the top of lines.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["a", "b", "c"]);
     ///
@@ -101,7 +101,7 @@ pub enum CursorMove {
     Top,
     /// Move cursor to the bottom of lines.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["a", "b", "c"]);
     ///
@@ -113,7 +113,7 @@ pub enum CursorMove {
     /// `fn foo(a)` consists of words `fn`, `foo`, `(`, `a`, `)`. When the cursor is at the end of line, it moves to the
     /// head of next line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["aaa bbb ccc"]);
     ///
@@ -127,7 +127,7 @@ pub enum CursorMove {
     /// `fn foo(a)` consists of words `fn`, `foo`, `(`, `a`, `)`. When the cursor is at the end of line, it moves to the
     /// end of the first word of the next line. This is similar to the 'e' mapping of Vim in normal mode.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from([
     ///     "aaa bbb [[[ccc]]]",
@@ -154,7 +154,7 @@ pub enum CursorMove {
     /// `fn foo(a)` consists of words `fn`, `foo`, `(`, `a`, `)`.When the cursor is at the head of line, it moves to
     /// the end of previous line.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["aaa bbb ccc"]);
     ///
@@ -169,7 +169,7 @@ pub enum CursorMove {
     WordBack,
     /// Move cursor down by one paragraph. Paragraph is a chunk of non-empty lines. Cursor moves to the first line of paragraph.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// // aaa
     /// //
@@ -187,7 +187,7 @@ pub enum CursorMove {
     ParagraphForward,
     /// Move cursor up by one paragraph. Paragraph is a chunk of non-empty lines. Cursor moves to the first line of paragraph.
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// // aaa
     /// //
@@ -212,7 +212,7 @@ pub enum CursorMove {
     /// When there are 10 lines, jumping to row 15 moves the cursor to the last line (row is 9 in the case). When there
     /// are 10 characters in the line, jumping to col 15 moves the cursor to end of the line (col is 10 in the case).
     /// ```
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// let mut textarea = TextArea::from(["aaaa", "bbbb", "cccc"]);
     ///
@@ -234,7 +234,7 @@ pub enum CursorMove {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, CursorMove};
+    /// use ratatui_textarea::{TextArea, CursorMove};
     ///
     /// // Let's say terminal height is 8.
     ///

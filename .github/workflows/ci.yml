@@ -58,7 +58,7 @@ jobs:
       - run: cargo clippy --examples --tests --no-default-features --features tuirs-termion,search -- -D warnings
       - run: cargo clippy --examples --tests --no-default-features --features tuirs-no-backend -- -D warnings
       - run: cargo clippy --examples --tests --no-default-features --features tuirs-no-backend,search -- -D warnings
-      - run: cargo rustdoc --features=search,termwiz,termion,serde -p tui-textarea -- -D warnings
+      - run: cargo rustdoc --features=search,termwiz,termion,serde -p ratatui-textarea -- -D warnings
   cargo-doc:
     runs-on: ubuntu-latest
     steps:
@@ -67,7 +67,7 @@ jobs:
       - name: Run `cargo rustdoc` with same configuration as docs.rs
         run: |
           set -e
-          md="$(cargo metadata --format-version=1 | jq '.packages[] | select(.name=="tui-textarea") | .metadata.docs.rs')"
+          md="$(cargo metadata --format-version=1 | jq '.packages[] | select(.name=="ratatui-textarea") | .metadata.docs.rs')"
           rustdoc_args="$(echo "$md" | jq -r '.["rustdoc-args"] | join(" ")') -D warnings"
           features="$(echo "$md" | jq -r '.features | join(",")')"
 
@@ -75,5 +75,5 @@ jobs:
           for target in $(echo "$md" | jq -r '.targets | join(" ")')
           do
             rustup target add "$target"
-            cargo rustdoc -p tui-textarea "--features=$features" "--target=$target" -- $rustdoc_args
+            cargo rustdoc -p ratatui-textarea "--features=$features" "--target=$target" -- $rustdoc_args
           done

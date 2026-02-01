@@ -7,8 +7,8 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders};
 use ratatui::Terminal;
+use ratatui_textarea::{Input, Key, TextArea};
 use std::io;
-use tui_textarea::{Input, Key, TextArea};
 
 fn main() -> io::Result<()> {
     let stdout = io::stdout();

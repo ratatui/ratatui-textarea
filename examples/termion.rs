@@ -1,6 +1,7 @@
 use ratatui::backend::TermionBackend;
 use ratatui::widgets::{Block, Borders};
 use ratatui::Terminal;
+use ratatui_textarea::{Input, Key, TextArea};
 use std::error::Error;
 use std::io;
 use std::sync::mpsc;
@@ -10,7 +11,6 @@ use termion::event::Event as TermEvent;
 use termion::input::{MouseTerminal, TermRead};
 use termion::raw::IntoRawMode;
 use termion::screen::IntoAlternateScreen;
-use tui_textarea::{Input, Key, TextArea};
 
 enum Event {
     Term(TermEvent),

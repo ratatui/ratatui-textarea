@@ -1,4 +1,4 @@
-use tui_textarea::{Input, Key, TextArea};
+use ratatui_textarea::{Input, Key, TextArea};
 
 // Sanity test for checking textarea does not crash against all combination of inputs
 #[test]

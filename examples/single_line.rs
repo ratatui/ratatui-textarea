@@ -7,8 +7,8 @@ use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders};
 use ratatui::Terminal;
+use ratatui_textarea::{Input, Key, TextArea};
 use std::io;
-use tui_textarea::{Input, Key, TextArea};
 
 fn validate(textarea: &mut TextArea) -> bool {
     if let Err(err) = textarea.lines()[0].parse::<f64>() {

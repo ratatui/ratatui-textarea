@@ -1,6 +1,6 @@
 #![cfg(feature = "serde")]
 
-use tui_textarea::{CursorMove, Input, Key, Scrolling};
+use ratatui_textarea::{CursorMove, Input, Key, Scrolling};
 
 #[test]
 fn test_serde_key() {

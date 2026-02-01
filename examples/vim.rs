@@ -6,12 +6,12 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders};
 use ratatui::Terminal;
+use ratatui_textarea::{CursorMove, Input, Key, Scrolling, TextArea};
 use std::env;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::io::BufRead;
-use tui_textarea::{CursorMove, Input, Key, Scrolling, TextArea};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {

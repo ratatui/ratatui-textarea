@@ -1,4 +1,4 @@
-use tui_textarea::TextArea;
+use ratatui_textarea::TextArea;
 
 // Regression test for #4
 #[test]

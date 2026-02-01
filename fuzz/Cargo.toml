@@ -1,5 +1,5 @@
 [package]
-name = "tui-textarea-fuzz"
+name = "ratatui-textarea-fuzz"
 version = "0.0.0"
 authors = ["Automatically generated"]
 publish = false
@@ -11,8 +11,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
-tui-textarea = { path = "..", features = ["search", "arbitrary"] }
-tui-textarea-bench = { path = "../bench" }
+ratatui-textarea = { path = "..", features = ["search", "arbitrary"] }
+ratatui-textarea-bench = { path = "../bench" }
 
 # Prevent this from interfering with workspaces
 [workspace]

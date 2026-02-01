@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
-use tui_textarea::{CursorMove, Input, Key, TextArea};
+use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 use tui_textarea_bench::{dummy_terminal, TerminalExt, LOREM, SEED};
 
 #[inline]
