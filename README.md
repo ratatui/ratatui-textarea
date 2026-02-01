@@ -8,8 +8,8 @@
 > [!NOTE]
 > This project is a Ratatui fork of [tui-textarea] and maintained independently. See [this issue][ecosystem-issue] for details.
 
-[ratatui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][] and [tui-rs][].
-Multi-line text editor can be easily put as part of your TUI application.
+[ratatui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][].
+Multi-rline text editor can be easily put as part of your TUI application.
 
 **Features:**
 
@@ -24,8 +24,9 @@ Multi-line text editor can be easily put as part of your TUI application.
 - Yank support. Paste text deleted with `C-k`, `C-j`, ...
 - Backend agnostic. [crossterm][], [termion][], [termwiz][], and your own backend are all supported
 - Multiple textarea widgets in the same screen
-- Support both [ratatui][] (the fork by community) and [tui-rs][] (the original)
 
+> [!warning]
+> This is a ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed. If you need tui-rs support, consider using the original crate.
 [Documentation][doc]
 
 ## Examples
