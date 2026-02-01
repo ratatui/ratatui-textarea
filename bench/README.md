@@ -1,4 +1,4 @@
-Benchmarks for tui-textarea using [Criterion.rs][criterion].
+Benchmarks for ratatui-textarea using [Criterion.rs][criterion].
 
 To run all benchmarks:
 

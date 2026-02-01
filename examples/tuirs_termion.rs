@@ -1,6 +1,7 @@
 // Use `termion` v1.5 for `tui` backend.
 use termion_15 as termion;
 
+use ratatui_textarea::{Input, Key, TextArea};
 use std::error::Error;
 use std::io;
 use std::sync::mpsc;
@@ -13,7 +14,6 @@ use termion::screen::AlternateScreen;
 use tui::backend::TermionBackend;
 use tui::widgets::{Block, Borders};
 use tui::Terminal;
-use tui_textarea::{Input, Key, TextArea};
 
 enum Event {
     Term(TermEvent),

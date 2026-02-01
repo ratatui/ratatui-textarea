@@ -5,8 +5,8 @@ use ratatui::backend::{Backend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::Terminal;
+use ratatui_textarea::TextArea;
 use std::io;
-use tui_textarea::TextArea;
 
 pub const LOREM: &[&str] = &[
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do",

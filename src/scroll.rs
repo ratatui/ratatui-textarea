@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// This type is marked as `#[non_exhaustive]` since more variations may be supported in the future. Note that the cursor will
 /// not move until it goes out the viewport. See also: [`TextArea::scroll`]
 ///
-/// [`TextArea::scroll`]: https://docs.rs/tui-textarea/latest/tui_textarea/struct.TextArea.html#method.scroll
+/// [`TextArea::scroll`]: https://docs.rs/ratatui-textarea/latest/ratatui_textarea/struct.TextArea.html#method.scroll
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -20,7 +20,7 @@ pub enum Scrolling {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, Scrolling};
+    /// use ratatui_textarea::{TextArea, Scrolling};
     ///
     /// // Let's say terminal height is 8.
     ///
@@ -46,7 +46,7 @@ pub enum Scrolling {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, Scrolling};
+    /// use ratatui_textarea::{TextArea, Scrolling};
     ///
     /// // Let's say terminal height is 8.
     ///
@@ -72,7 +72,7 @@ pub enum Scrolling {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, Scrolling, CursorMove};
+    /// use ratatui_textarea::{TextArea, Scrolling, CursorMove};
     ///
     /// // Let's say terminal height is 8.
     ///
@@ -102,7 +102,7 @@ pub enum Scrolling {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, Scrolling};
+    /// use ratatui_textarea::{TextArea, Scrolling};
     ///
     /// // Let's say terminal height is 8.
     ///
@@ -128,7 +128,7 @@ pub enum Scrolling {
     /// # use ratatui::buffer::Buffer;
     /// # use ratatui::layout::Rect;
     /// # use ratatui::widgets::Widget as _;
-    /// use tui_textarea::{TextArea, Scrolling, CursorMove};
+    /// use ratatui_textarea::{TextArea, Scrolling, CursorMove};
     ///
     /// // Let's say terminal height is 8.
     ///

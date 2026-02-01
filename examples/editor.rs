@@ -8,6 +8,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Terminal;
+use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 use std::borrow::Cow;
 use std::env;
 use std::fmt::Display;
@@ -15,7 +16,6 @@ use std::fs;
 use std::io;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
-use tui_textarea::{CursorMove, Input, Key, TextArea};
 
 macro_rules! error {
     ($fmt: expr $(, $args:tt)*) => {{

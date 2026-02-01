@@ -7,8 +7,8 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders};
 use ratatui::Terminal;
+use ratatui_textarea::{Input, Key, TextArea};
 use std::io;
-use tui_textarea::{Input, Key, TextArea};
 
 fn inactivate(textarea: &mut TextArea<'_>) {
     textarea.set_cursor_line_style(Style::default());

@@ -3,8 +3,8 @@
 use arbitrary::{Arbitrary, Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::str;
-use tui_textarea::{CursorMove, Input, TextArea};
-use tui_textarea_bench::{dummy_terminal, TerminalExt};
+use ratatui_textarea::{CursorMove, Input, TextArea};
+use ratatui_textara_bench::{dummy_terminal, TerminalExt};
 
 #[derive(Arbitrary)]
 enum RandomInput {

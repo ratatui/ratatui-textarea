@@ -11,7 +11,7 @@ For reporting a bug, please make sure your report includes the following points.
   - Your terminal
   - Rust version
   - `ratatui` or `tui` crate version
-  - Enabled features of `tui-textarea` crate
+  - Enabled features of `ratatui-textarea` crate
 
 An example of bug report: https://github.com/rhysd/tui-textarea/issues/1
 
@@ -42,7 +42,7 @@ on files being changed.
 
 Code coverage is monitored on [codecov][].
 
-https://app.codecov.io/gh/rhysd/tui-textarea
+https://app.codecov.io/gh/ratatui/ratatui-textarea
 
 When you implement some new feature, consider to add new unit tests which cover your implementation.
 

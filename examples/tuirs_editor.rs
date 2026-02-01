@@ -5,6 +5,7 @@ use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
+use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 use std::borrow::Cow;
 use std::env;
 use std::fmt::Display;
@@ -18,7 +19,6 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::widgets::{Block, Borders, Paragraph};
 use tui::Terminal;
-use tui_textarea::{CursorMove, Input, Key, TextArea};
 
 macro_rules! error {
     ($fmt: expr $(, $args:tt)*) => {{

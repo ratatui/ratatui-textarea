@@ -1,11 +1,11 @@
-tui-textarea
-============
+# ratatui-textarea
+
 [![crate][crates-io-badge]][crate]
 [![docs][doc-badge]][doc]
 [![CI][ci-badge]][ci]
 [![coverage][codecov-badge]][codecov]
 
-[tui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][] and [tui-rs][].
+[ratatui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][] and [tui-rs][].
 Multi-line text editor can be easily put as part of your TUI application.
 
 **Features:**
@@ -27,7 +27,7 @@ Multi-line text editor can be easily put as part of your TUI application.
 
 ## Examples
 
-Running `cargo run --example` in this repository can demonstrate usage of tui-textarea.
+Running `cargo run --example` in this repository can demonstrate usage of ratatui-textarea.
 
 ### [`minimal`](./examples/minimal.rs)
 
@@ -141,12 +141,12 @@ cargo run --example tuirs_termion --no-default-features --features=tuirs-termion
 
 ## Installation
 
-Add `tui-textarea` crate to dependencies in your `Cargo.toml`. This enables crossterm backend support by default.
+Add `ratatui-textarea` crate to dependencies in your `Cargo.toml`. This enables crossterm backend support by default.
 
 ```toml
 [dependencies]
 ratatui = "*"
-tui-textarea = "*"
+ratatui-textarea = "*"
 ```
 
 If you need text search with regular expressions, enable `search` feature. It adds [regex crate][regex] as dependency.
@@ -154,7 +154,7 @@ If you need text search with regular expressions, enable `search` feature. It ad
 ```toml
 [dependencies]
 ratatui = "*"
-tui-textarea = { version = "*", features = ["search"] }
+ratatui-textarea = { version = "*", features = ["search"] }
 ```
 
 If you're using ratatui with [termion][] or [termwiz][], enable the `termion` or `termwiz` feature instead of
@@ -165,18 +165,18 @@ If you're using ratatui with [termion][] or [termwiz][], enable the `termion` or
 
 # For termion
 ratatui = { version = "*", default-features = false, features = ["termion"] }
-tui-textarea = { version = "*", default-features = false, features = ["termion"] }
+ratatui-textarea = { version = "*", default-features = false, features = ["termion"] }
 
 # For termwiz
 ratatui = { version = "*", default-features = false, features = ["termwiz"] }
-tui-textarea = { version = "*", default-features = false, features = ["termwiz"] }
+ratatui-textarea = { version = "*", default-features = false, features = ["termwiz"] }
 ```
 
 If you're using [tui-rs][] instead of [ratatui][], you need to enable features for using tui-rs crate and to disable
 default features. The following table shows feature names corresponding to the dependencies.
 
 |         | crossterm                        | termion         | termwiz   | Your own backend   |
-|---------|----------------------------------|-----------------|-----------|--------------------|
+| ------- | -------------------------------- | --------------- | --------- | ------------------ |
 | ratatui | `crossterm` (enabled by default) | `termion`       | `termwiz` | `no-backend`       |
 | tui-rs  | `tuirs-crossterm`                | `tuirs-termion` | N/A       | `tuirs-no-backend` |
 
@@ -185,7 +185,7 @@ For example, when you want to use the combination of [tui-rs][] and [crossterm][
 ```toml
 [dependencies]
 tui = "*"
-tui-textarea = { version = "*", features = ["tuirs-crossterm"], default-features = false }
+ratatui-textarea = { version = "*", features = ["tuirs-crossterm"], default-features = false }
 ```
 
 Note that [ratatui][] support and [tui-rs][] support are exclusive. When you use [tui-rs][] support, you must disable
@@ -200,7 +200,7 @@ are using. For example, [tui-rs][] depends on [crossterm][] v0.2.5 or [termion][
 ## Minimal Usage
 
 ```rust,ignore
-use tui_textarea::TextArea;
+use ratatui_textarea::TextArea;
 use crossterm::event::{Event, read};
 
 let mut term = ratatui::Terminal::new(...);
@@ -243,7 +243,7 @@ key mappings as well.
 Default key mappings are as follows:
 
 | Mappings                                     | Description                               |
-|----------------------------------------------|-------------------------------------------|
+| -------------------------------------------- | ----------------------------------------- |
 | `Ctrl+H`, `Backspace`                        | Delete one character before cursor        |
 | `Ctrl+D`, `Delete`                           | Delete one character next to cursor       |
 | `Ctrl+M`, `Enter`                            | Insert newline                            |
@@ -432,7 +432,7 @@ To use text search, `search` feature needs to be enabled in your `Cargo.toml`. I
 depending on `regex` crate until it is necessary.
 
 ```toml
-tui-textarea = { version = "*", features = ["search"] }
+ratatui-textarea = { version = "*", features = ["search"] }
 ```
 
 ## Advanced Usage
@@ -443,7 +443,7 @@ To use `TextArea` for a single-line input widget like `<input>` in HTML, ignore 
 
 ```rust,ignore
 use crossterm::event::{Event, read};
-use tui_textarea::{Input, Key};
+use ratatui_textarea::{Input, Key};
 
 let default_text: &str = ...;
 let default_text = default_text.replace(&['\n', '\r'], " "); // Ensure no new line is contained
@@ -471,11 +471,11 @@ See [`single_line` example](./examples/single_line.rs) for working example.
 
 ### Define your own key mappings
 
-All editor operations are defined as public methods of `TextArea`. To move cursor, use `tui_textarea::CursorMove` to
+All editor operations are defined as public methods of `TextArea`. To move cursor, use `ratatui_textarea::CursorMove` to
 notify how to move the cursor.
 
 | Method                                               | Operation                                       |
-|------------------------------------------------------|-------------------------------------------------|
+| ---------------------------------------------------- | ----------------------------------------------- |
 | `textarea.delete_char()`                             | Delete one character before cursor              |
 | `textarea.delete_next_char()`                        | Delete one character next to cursor             |
 | `textarea.insert_newline()`                          | Insert newline                                  |
@@ -534,19 +534,19 @@ match read()?.into() {
 ### Use your own backend
 
 ratatui and tui-rs allows to make your own backend by implementing [`ratatui::backend::Backend`][ratatui-backend] trait.
-tui-textarea supports it as well. Please use `no-backend` feature for [ratatui][] or `tuirs-no-backend` feature for
+ratatui-textarea supports it as well. Please use `no-backend` feature for [ratatui][] or `tuirs-no-backend` feature for
 [tui-rs][]. They avoid adding backend crates (crossterm, termion, or termwiz) since you're using your own backend.
 
 ```toml
 [dependencies]
 # For ratatui
-tui-textarea = { version = "*", default-features = false, features = ["no-backend"] }
+ratatui-textarea = { version = "*", default-features = false, features = ["no-backend"] }
 # For tui-rs
-tui-textarea = { version = "*", default-features = false, features = ["tuirs-no-backend"] }
+ratatui-textarea = { version = "*", default-features = false, features = ["tuirs-no-backend"] }
 ```
 
-`tui_textarea::Input` is a type for backend-agnostic key input. What you need to do is converting key event in your own
-backend into the `tui_textarea::Input` instance. Then `TextArea::input()` method can handle the input as other backend.
+`ratatui_textarea::Input` is a type for backend-agnostic key input. What you need to do is converting key event in your own
+backend into the `ratatui_textarea::Input` instance. Then `TextArea::input()` method can handle the input as other backend.
 
 In the following example, let's say `your_backend::KeyDown` is a key event type for your backend and
 `your_backend::read_next_key()` returns the next key event.
@@ -568,10 +568,10 @@ pub fn read_next_key() -> (KeyDown, bool, bool) {
 }
 ```
 
-Then you can implement the logic to convert `your_backend::KeyDown` value into `tui_textarea::Input` value.
+Then you can implement the logic to convert `your_backend::KeyDown` value into `ratatui_textarea::Input` value.
 
 ```rust,ignore
-use tui_textarea::{Input, Key};
+use ratatui_textarea::{Input, Key};
 use your_backend::KeyDown;
 
 fn keydown_to_input(key: KeyDown, ctrl: bool, alt: bool) -> Input {
@@ -586,10 +586,10 @@ fn keydown_to_input(key: KeyDown, ctrl: bool, alt: bool) -> Input {
 }
 ```
 
-For the keys which are not handled by tui-textarea, `tui_textarea::Input::default()` is available. It returns 'null'
+For the keys which are not handled by ratatui-textarea, `ratatui_textarea::Input::default()` is available. It returns 'null'
 key. An editor will do nothing with the key.
 
-Finally, convert your own backend's key input type into `tui_textarea::Input` and pass it to `TextArea::input()`.
+Finally, convert your own backend's key input type into `ratatui_textarea::Input` and pass it to `TextArea::input()`.
 
 ```rust,ignore
 let mut textarea = ...;
@@ -613,7 +613,7 @@ You don't need to do anything special. Create multiple `TextArea` instances and 
 The following is an example to put two textarea widgets in application and manage the focus.
 
 ```rust,ignore
-use tui_textarea::{TextArea, Input, Key};
+use ratatui_textarea::{TextArea, Input, Key};
 use crossterm::event::{Event, read};
 
 let editors = &mut [
@@ -649,7 +649,7 @@ This crate optionally supports [serde][] crate by enabling `serde` feature.
 
 ```toml
 [dependencies]
-tui-textarea = { version = "*", features = ["serde"] }
+ratatui-textarea = { version = "*", features = ["serde"] }
 ```
 
 Values of the following types can be serialized/deserialized:
@@ -662,7 +662,7 @@ Values of the following types can be serialized/deserialized:
 Here is an example for deserializing key input from JSON using [serde_json][].
 
 ```rust,ignore
-use tui_textarea::Input;
+use ratatui_textarea::Input;
 
 let json = r#"
     {
@@ -696,7 +696,7 @@ as follows:
 - Minor: Bump on breaking change
 - Patch: Bump on new feature or bug fix
 
-## Contributing to tui-textarea
+## Contributing to ratatui-textarea
 
 This project is developed [on GitHub][repo].
 
@@ -707,25 +707,25 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting an issue or ma
 
 ## License
 
-tui-textarea is distributed under [The MIT License](./LICENSE.txt).
+ratatui-textarea is distributed under [The MIT License](./LICENSE.txt).
 
-[crates-io-badge]: https://img.shields.io/crates/v/tui-textarea.svg
-[crate]: https://crates.io/crates/tui-textarea
-[doc-badge]: https://docs.rs/tui-textarea/badge.svg
-[doc]: https://docs.rs/tui-textarea/latest/tui_textarea/
-[ci-badge]: https://github.com/rhysd/tui-textarea/actions/workflows/ci.yml/badge.svg?event=push
-[ci]: https://github.com/rhysd/tui-textarea/actions/workflows/ci.yml
-[codecov-badge]: https://codecov.io/gh/rhysd/tui-textarea/graph/badge.svg?token=YAA3EVRXAY
-[codecov]: https://codecov.io/gh/rhysd/tui-textarea
+[crates-io-badge]: https://img.shields.io/crates/v/ratatui-textarea.svg
+[crate]: https://crates.io/crates/ratatui-textarea
+[doc-badge]: https://docs.rs/ratatui-textarea/badge.svg
+[doc]: https://docs.rs/ratatui-textarea/latest/ratatui_textarea/
+[ci-badge]: https://github.com/ratatui/ratatui-textarea/actions/workflows/ci.yml/badge.svg?event=push
+[ci]: https://github.com/ratatui/ratatui-textarea/actions/workflows/ci.yml
+[codecov-badge]: https://codecov.io/gh/ratatui/ratatui-textarea/graph/badge.svg
+[codecov]: https://codecov.io/gh/ratatui/ratatui-textarea
 [tui-rs]: https://github.com/fdehau/tui-rs
 [ratatui]: https://github.com/ratatui/ratatui
 [crossterm]: https://docs.rs/crossterm/latest/crossterm/
 [termion]: https://docs.rs/termion/latest/termion/
 [termwiz]: https://docs.rs/termwiz/latest/termwiz/
 [ratatui-backend]: https://docs.rs/ratatui/latest/ratatui/backend/trait.Backend.html
-[repo]: https://github.com/rhysd/tui-textarea
-[new-issue]: https://github.com/rhysd/tui-textarea/issues/new
-[pulls]: https://github.com/rhysd/tui-textarea/pulls
+[repo]: https://github.com/ratatui/ratatui-textarea
+[new-issue]: https://github.com/ratatui/ratatui-textarea/issues/new
+[pulls]: https://github.com/ratatui/ratatui-textarea/pulls
 [regex]: https://docs.rs/regex/latest/regex/
 [serde]: https://crates.io/crates/serde
 [serde_json]: https://crates.io/crates/serde_json
