@@ -5,6 +5,9 @@
 [![CI][ci-badge]][ci]
 [![coverage][codecov-badge]][codecov]
 
+> [!NOTE]
+> This project is a Ratatui fork of [tui-textarea] and maintained independently. See [this issue][ecosystem-issue] for details.
+
 [ratatui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][] and [tui-rs][].
 Multi-line text editor can be easily put as part of your TUI application.
 
@@ -717,7 +720,9 @@ ratatui-textarea is distributed under [The MIT License](./LICENSE.txt).
 [ci]: https://github.com/ratatui/ratatui-textarea/actions/workflows/ci.yml
 [codecov-badge]: https://codecov.io/gh/ratatui/ratatui-textarea/graph/badge.svg
 [codecov]: https://codecov.io/gh/ratatui/ratatui-textarea
+[ecosystem-issue]: https://github.com/ratatui/ratatui/discussions/2367#discussioncomment-15664087
 [tui-rs]: https://github.com/fdehau/tui-rs
+[tui-textarea]: https://github.com/rhysd/tui-textarea
 [ratatui]: https://github.com/ratatui/ratatui
 [crossterm]: https://docs.rs/crossterm/latest/crossterm/
 [termion]: https://docs.rs/termion/latest/termion/
