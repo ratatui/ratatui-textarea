@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Default)]
 pub enum Key {
     /// Normal letter key input
     Char(char),
@@ -59,13 +60,8 @@ pub enum Key {
     /// Virtual key to scroll up by mouse
     MouseScrollUp,
     /// An invalid key input (this key is always ignored by [`TextArea`](crate::TextArea))
+    #[default]
     Null,
-}
-
-impl Default for Key {
-    fn default() -> Self {
-        Key::Null
-    }
 }
 
 /// Backend-agnostic key input type.

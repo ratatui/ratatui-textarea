@@ -2,7 +2,7 @@
 name = "ratatui-textarea"
 version = "0.7.0"
 edition = "2021"
-rust-version = "1.56.1"
+rust-version = "1.86.0"
 authors = ["rhysd <lin90162@yahoo.co.jp>"]
 description = """
 ratatui-textarea is a simple yet powerful text editor widget for ratatui.
