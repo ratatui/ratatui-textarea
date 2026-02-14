@@ -1,8 +1,8 @@
 use super::{Input, Key};
-use termion::event::{Event, Key as KeyEvent, MouseButton, MouseEvent};
+use ratatui_termion::termion::event::{Event, Key as KeyEvent, MouseButton, MouseEvent};
 
 impl From<Event> for Input {
-    /// Convert [`termion::event::Event`] into [`Input`].
+    /// Convert [`ratatui_termion::termion::event::Event`] into [`Input`].
     fn from(event: Event) -> Self {
         match event {
             Event::Key(key) => Self::from(key),
@@ -13,14 +13,17 @@ impl From<Event> for Input {
 }
 
 impl From<KeyEvent> for Input {
-    /// Convert [`termion::event::Key`] into [`Input`].
+    /// Convert [`ratatui_termion::termion::event::Key`] into [`Input`].
     ///
-    /// termion does not provide a way to get Shift key's state. Instead termion passes key inputs as-is. For example,
-    /// when 'Shift + A' is pressed with US keyboard, termion passes `termion::event::Key::Char('A')`. We cannot know
-    /// how the 'A' character was input.
+    /// termion does not provide a way to get Shift key's state. Instead termion passes key inputs
+    /// as-is. For example, when 'Shift + A' is pressed with US keyboard, termion passes
+    /// `ratatui_termion::termion::event::Key::Char('A')`. We cannot know how the 'A' character was
+    /// input.
     ///
-    /// So the `shift` field of the returned `Input` instance is always `false` except for combinations with arrow keys.
-    /// For example, `termion::event::Key::Char('A')` is converted to `Input { key: Key::Char('A'), shift: false, .. }`.
+    /// So the `shift` field of the returned `Input` instance is always `false` except for
+    /// combinations with arrow keys. For example,
+    /// `ratatui_termion::termion::event::Key::Char('A')` is converted to `Input { key:
+    /// Key::Char('A'), shift: false, .. }`.
     fn from(key: KeyEvent) -> Self {
         let (ctrl, alt, shift) = match key {
             KeyEvent::Ctrl(_)
@@ -77,7 +80,7 @@ impl From<KeyEvent> for Input {
 }
 
 impl From<MouseButton> for Key {
-    /// Convert [`termion::event::MouseButton`] into [`Key`].
+    /// Convert [`ratatui_termion::termion::event::MouseButton`] into [`Key`].
     fn from(button: MouseButton) -> Self {
         match button {
             MouseButton::WheelUp => Key::MouseScrollUp,
@@ -88,7 +91,7 @@ impl From<MouseButton> for Key {
 }
 
 impl From<MouseEvent> for Input {
-    /// Convert [`termion::event::MouseEvent`] into [`Input`].
+    /// Convert [`ratatui_termion::termion::event::MouseEvent`] into [`Input`].
     fn from(mouse: MouseEvent) -> Self {
         let key = if let MouseEvent::Press(button, ..) = mouse {
             Key::from(button)

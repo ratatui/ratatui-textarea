@@ -1,10 +1,10 @@
 use super::{Input, Key};
-use crossterm::event::{
+use ratatui_crossterm::crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
 };
 
 impl From<Event> for Input {
-    /// Convert [`crossterm::event::Event`] into [`Input`].
+    /// Convert [`ratatui_crossterm::crossterm::event::Event`] into [`Input`].
     fn from(event: Event) -> Self {
         match event {
             Event::Key(key) => Self::from(key),
@@ -15,7 +15,7 @@ impl From<Event> for Input {
 }
 
 impl From<KeyCode> for Key {
-    /// Convert [`crossterm::event::KeyCode`] into [`Key`].
+    /// Convert [`ratatui_crossterm::crossterm::event::KeyCode`] into [`Key`].
     fn from(code: KeyCode) -> Self {
         match code {
             KeyCode::Char(c) => Key::Char(c),
@@ -39,7 +39,7 @@ impl From<KeyCode> for Key {
 }
 
 impl From<KeyEvent> for Input {
-    /// Convert [`crossterm::event::KeyEvent`] into [`Input`].
+    /// Convert [`ratatui_crossterm::crossterm::event::KeyEvent`] into [`Input`].
     fn from(key: KeyEvent) -> Self {
         if key.kind == KeyEventKind::Release {
             // On Windows or when `crossterm::event::PushKeyboardEnhancementFlags` is set,
@@ -62,7 +62,7 @@ impl From<KeyEvent> for Input {
 }
 
 impl From<MouseEventKind> for Key {
-    /// Convert [`crossterm::event::MouseEventKind`] into [`Key`].
+    /// Convert [`ratatui_crossterm::crossterm::event::MouseEventKind`] into [`Key`].
     fn from(kind: MouseEventKind) -> Self {
         match kind {
             MouseEventKind::ScrollDown => Key::MouseScrollDown,
@@ -73,7 +73,7 @@ impl From<MouseEventKind> for Key {
 }
 
 impl From<MouseEvent> for Input {
-    /// Convert [`crossterm::event::MouseEvent`] into [`Input`].
+    /// Convert [`ratatui_crossterm::crossterm::event::MouseEvent`] into [`Input`].
     fn from(mouse: MouseEvent) -> Self {
         let key = Key::from(mouse.kind);
         let ctrl = mouse.modifiers.contains(KeyModifiers::CONTROL);
@@ -92,7 +92,7 @@ impl From<MouseEvent> for Input {
 mod tests {
     use super::*;
     use crate::input::tests::input;
-    use crossterm::event::KeyEventState;
+    use ratatui_crossterm::crossterm::event::KeyEventState;
 
     fn key_event(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent {

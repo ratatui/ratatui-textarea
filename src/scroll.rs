@@ -193,9 +193,8 @@ mod tests {
     #[test]
     fn delta() {
         use crate::TextArea;
-        use ratatui::buffer::Buffer;
-        use ratatui::layout::Rect;
-        use ratatui::widgets::Widget as _;
+        use ratatui_core::widgets::Widget;
+        use ratatui_core::{buffer::Buffer, layout::Rect};
 
         let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
         let r = Rect {

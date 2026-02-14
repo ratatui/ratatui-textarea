@@ -1,10 +1,10 @@
 use super::{Input, Key};
-use termwiz::input::{
+use ratatui_termwiz::termwiz::input::{
     InputEvent, KeyCode, KeyEvent, Modifiers, MouseButtons, MouseEvent, PixelMouseEvent,
 };
 
 impl From<InputEvent> for Input {
-    /// Convert [`termwiz::input::InputEvent`] into [`Input`].
+    /// Convert [`ratatui_termwiz::termwiz::input::InputEvent`] into [`Input`].
     fn from(input: InputEvent) -> Self {
         match input {
             InputEvent::Key(key) => Self::from(key),
@@ -16,7 +16,7 @@ impl From<InputEvent> for Input {
 }
 
 impl From<KeyCode> for Key {
-    /// Convert [`termwiz::input::KeyCode`] into [`Key`].
+    /// Convert [`ratatui_termwiz::termwiz::input::KeyCode`] into [`Key`].
     fn from(key: KeyCode) -> Self {
         match key {
             KeyCode::Char(c) => Key::Char(c),
@@ -43,7 +43,7 @@ impl From<KeyCode> for Key {
 }
 
 impl From<KeyEvent> for Input {
-    /// Convert [`termwiz::input::KeyEvent`] into [`Input`].
+    /// Convert [`ratatui_termwiz::termwiz::input::KeyEvent`] into [`Input`].
     fn from(key: KeyEvent) -> Self {
         let KeyEvent { key, modifiers } = key;
         let key = Key::from(key);
@@ -61,7 +61,7 @@ impl From<KeyEvent> for Input {
 }
 
 impl From<MouseButtons> for Key {
-    /// Convert [`termwiz::input::MouseButtons`] into [`Key`].
+    /// Convert [`ratatui_termwiz::termwiz::input::MouseButtons`] into [`Key`].
     fn from(buttons: MouseButtons) -> Self {
         if buttons.contains(MouseButtons::VERT_WHEEL) {
             if buttons.contains(MouseButtons::WHEEL_POSITIVE) {
@@ -76,7 +76,7 @@ impl From<MouseButtons> for Key {
 }
 
 impl From<MouseEvent> for Input {
-    /// Convert [`termwiz::input::MouseEvent`] into [`Input`].
+    /// Convert [`ratatui_termwiz::termwiz::input::MouseEvent`] into [`Input`].
     fn from(mouse: MouseEvent) -> Self {
         let MouseEvent {
             mouse_buttons,
@@ -98,7 +98,7 @@ impl From<MouseEvent> for Input {
 }
 
 impl From<PixelMouseEvent> for Input {
-    /// Convert [`termwiz::input::PixelMouseEvent`] into [`Input`].
+    /// Convert [`ratatui_termwiz::termwiz::input::PixelMouseEvent`] into [`Input`].
     fn from(mouse: PixelMouseEvent) -> Self {
         let PixelMouseEvent {
             mouse_buttons,

@@ -1,11 +1,12 @@
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{
+use ratatui_core::terminal::Terminal;
+use ratatui_crossterm::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use ratatui_crossterm::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::widgets::{Block, Borders};
+use ratatui_crossterm::{CrosstermBackend, crossterm};
 use ratatui_textarea::{Input, Key, TextArea};
+use ratatui_widgets::block::Block;
+use ratatui_widgets::borders::Borders;
 use std::io;
 
 fn main() -> io::Result<()> {

@@ -19,9 +19,9 @@ include = ["/src", "/examples", "/tests", "/README.md", "/LICENSE.txt"]
 [features]
 default = ["crossterm"]
 # Features to use ratatui
-crossterm = ["dep:crossterm", "ratatui/crossterm"]
-termion = ["dep:termion", "ratatui/termion"]
-termwiz = ["dep:termwiz", "ratatui/termwiz"]
+crossterm = ["dep:ratatui-crossterm"]
+termion = ["dep:ratatui-termion"]
+termwiz = ["dep:ratatui-termwiz"]
 # Other optional features
 search = ["dep:regex"]
 serde = ["dep:serde"]
@@ -29,11 +29,13 @@ arbitrary = ["dep:arbitrary"]
 
 [dependencies]
 arbitrary = { version = "1", features = ["derive"], optional = true }
-crossterm = { package = "crossterm", version = "0.28", optional = true }
-ratatui = { version = "0.29.0", default-features = false }
+# ratatui = { version = "0.30.0", default-features = false }
+ratatui-core = { version = "0.1.0" }
+ratatui-widgets = { version = "0.3.0" }
+ratatui-crossterm = { version = "0.1.0", optional = true }
+ratatui-termion = { version = "0.1.0", optional = true }
+ratatui-termwiz = { version = "0.1.0", optional = true }
 regex = { version = "1", optional = true }
-termion = { version = "4.0", optional = true }
-termwiz = { version = "0.22.0", optional = true }
 unicode-width = "0.2.0"
 serde = { version = "1", optional = true , features = ["derive"] }
 

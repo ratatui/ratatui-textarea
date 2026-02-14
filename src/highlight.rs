@@ -1,7 +1,6 @@
 use crate::util::{num_digits, spaces};
-use ratatui::style::Style;
-use ratatui::text::Line;
-use ratatui::text::Span;
+use ratatui_core::style::Style;
+use ratatui_core::text::{Line, Span};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use unicode_width::UnicodeWidthChar as _;
@@ -251,7 +250,7 @@ impl<'a> LineHighlighter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Color;
+    use ratatui_core::style::Color;
     use std::fmt::Debug;
     use unicode_width::UnicodeWidthStr as _;
 

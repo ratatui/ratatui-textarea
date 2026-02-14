@@ -1,9 +1,10 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui_core::buffer::Buffer;
+use ratatui_core::layout::Rect;
+use ratatui_core::text::{Line, Span, Text};
+use ratatui_core::widgets::Widget;
+use ratatui_widgets::paragraph::Paragraph;
 use std::cmp;
 use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -1,14 +1,16 @@
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{
+use ratatui_core::layout::{Constraint, Direction, Layout};
+use ratatui_core::style::{Color, Modifier, Style};
+use ratatui_core::terminal::Terminal;
+use ratatui_core::text::{Line, Span};
+use ratatui_crossterm::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use ratatui_crossterm::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui_crossterm::{CrosstermBackend, crossterm};
 use ratatui_textarea::{CursorMove, Input, Key, TextArea};
+use ratatui_widgets::block::Block;
+use ratatui_widgets::borders::Borders;
+use ratatui_widgets::paragraph::Paragraph;
 use std::borrow::Cow;
 use std::env;
 use std::fmt::Display;
