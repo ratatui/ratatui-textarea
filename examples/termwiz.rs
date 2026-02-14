@@ -1,6 +1,6 @@
+use ratatui::Terminal;
 use ratatui::backend::TermwizBackend;
 use ratatui::widgets::{Block, Borders};
-use ratatui::Terminal;
 use ratatui_textarea::{Input, Key, TextArea};
 use std::error::Error;
 use std::time::Duration;

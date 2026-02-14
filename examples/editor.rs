@@ -1,13 +1,13 @@
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::Terminal;
 use ratatui_textarea::{CursorMove, Input, Key, TextArea};
 use std::borrow::Cow;
 use std::env;
@@ -53,11 +53,7 @@ impl SearchBox<'_> {
     }
 
     fn height(&self) -> u16 {
-        if self.open {
-            3
-        } else {
-            0
-        }
+        if self.open { 3 } else { 0 }
     }
 
     fn input(&mut self, input: Input) -> Option<&'_ str> {
