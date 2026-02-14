@@ -126,22 +126,6 @@ cargo run --example termwiz --no-default-features --features=termwiz
 
 Minimal usage with [termwiz][] support.
 
-### Examples for [tui-rs][] support
-
-All above examples use [ratatui][], but some examples provide tui-rs version. Try `tuirs_` prefix. In these cases, you
-need to specify features to use tui-rs and `--no-default-features` flag explicitly.
-
-```sh
-# tui-rs version of `minimal` example
-cargo run --example tuirs_minimal --no-default-features --features=tuirs-crossterm
-
-# tui-rs version of `editor` example
-cargo run --example tuirs_editor --no-default-features --features=tuirs-crossterm,search file.txt
-
-# tui-rs version of `termion` example
-cargo run --example tuirs_termion --no-default-features --features=tuirs-termion
-```
-
 ## Installation
 
 Add `ratatui-textarea` crate to dependencies in your `Cargo.toml`. This enables crossterm backend support by default.
@@ -175,30 +159,9 @@ ratatui = { version = "*", default-features = false, features = ["termwiz"] }
 ratatui-textarea = { version = "*", default-features = false, features = ["termwiz"] }
 ```
 
-If you're using [tui-rs][] instead of [ratatui][], you need to enable features for using tui-rs crate and to disable
-default features. The following table shows feature names corresponding to the dependencies.
-
-|         | crossterm                        | termion         | termwiz   | Your own backend   |
-| ------- | -------------------------------- | --------------- | --------- | ------------------ |
-| ratatui | `crossterm` (enabled by default) | `termion`       | `termwiz` | `no-backend`       |
-| tui-rs  | `tuirs-crossterm`                | `tuirs-termion` | N/A       | `tuirs-no-backend` |
-
-For example, when you want to use the combination of [tui-rs][] and [crossterm][],
-
-```toml
-[dependencies]
-tui = "*"
-ratatui-textarea = { version = "*", features = ["tuirs-crossterm"], default-features = false }
-```
-
-Note that [ratatui][] support and [tui-rs][] support are exclusive. When you use [tui-rs][] support, you must disable
-[ratatui][] support by `default-features = false`.
-
 In addition to above dependencies, you also need to install [crossterm][] or [termion][] or [termwiz][] to initialize
-your application and to receive key inputs. Note that the dependency versions of [crossterm][] crate and [termion][]
-crate differ between [ratatui][] and [tui-rs][]. Please make sure to use the same version that matches the package you
-are using. For example, [tui-rs][] depends on [crossterm][] v0.2.5 or [termion][] v1.5 where both crates are older than
-[ratatui][]'s dependencies.
+your application and to receive key inputs. Please make sure to use the same version that matches the package you
+are using.
 
 ## Minimal Usage
 
@@ -536,16 +499,13 @@ match read()?.into() {
 
 ### Use your own backend
 
-ratatui and tui-rs allows to make your own backend by implementing [`ratatui::backend::Backend`][ratatui-backend] trait.
-ratatui-textarea supports it as well. Please use `no-backend` feature for [ratatui][] or `tuirs-no-backend` feature for
-[tui-rs][]. They avoid adding backend crates (crossterm, termion, or termwiz) since you're using your own backend.
+ratatui allows to make your own backend by implementing the [`ratatui::backend::Backend`][ratatui-backend] trait.
+ratatui-textarea supports it as well. Please disable default features to do so. This avoids adding backend
+crates (crossterm, termion, or termwiz) since you're using your own backend.
 
 ```toml
 [dependencies]
-# For ratatui
-ratatui-textarea = { version = "*", default-features = false, features = ["no-backend"] }
-# For tui-rs
-ratatui-textarea = { version = "*", default-features = false, features = ["tuirs-no-backend"] }
+ratatui-textarea = { version = "*", default-features = false }
 ```
 
 `ratatui_textarea::Input` is a type for backend-agnostic key input. What you need to do is converting key event in your own

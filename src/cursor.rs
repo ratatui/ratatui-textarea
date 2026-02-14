@@ -376,10 +376,10 @@ mod tests {
     // Separate tests for tui-rs support
     #[test]
     fn in_viewport() {
-        use crate::ratatui::buffer::Buffer;
-        use crate::ratatui::layout::Rect;
-        use crate::ratatui::widgets::Widget as _;
         use crate::{CursorMove, TextArea};
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+        use ratatui::widgets::Widget as _;
 
         let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
         let r = Rect {

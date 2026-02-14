@@ -2,21 +2,18 @@ use crate::cursor::CursorMove;
 use crate::highlight::LineHighlighter;
 use crate::history::{Edit, EditKind, History};
 use crate::input::{Input, Key};
-use crate::ratatui::layout::Alignment;
-use crate::ratatui::style::{Color, Modifier, Style};
-use crate::ratatui::widgets::{Block, Widget};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
 use crate::util::{spaces, Pos};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
-#[cfg(feature = "ratatui")]
+use ratatui::layout::Alignment;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
+use ratatui::widgets::{Block, Widget};
 use std::cmp::Ordering;
 use std::fmt;
-#[cfg(feature = "tuirs")]
-use tui::text::Spans as Line;
 use unicode_width::UnicodeWidthChar as _;
 
 #[derive(Debug, Clone)]
@@ -2409,9 +2406,9 @@ mod tests {
     // Separate tests for tui-rs support
     #[test]
     fn scroll() {
-        use crate::ratatui::buffer::Buffer;
-        use crate::ratatui::layout::Rect;
-        use crate::ratatui::widgets::Widget as _;
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+        use ratatui::widgets::Widget as _;
 
         let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
         let r = Rect {

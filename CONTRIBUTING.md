@@ -29,11 +29,10 @@ To run linters:
 
 ```sh
 cargo clippy --features=search,termwiz,termion --tests --examples
-cargo clippy --features=tuirs-crossterm,tuirs-termion,search --no-default-features --tests --examples
 cargo fmt -- --check
 ```
 
-Note: On Windows, remove `termion` and `tuirs-termion` features from `--features` argument since termion doesn't support Windows.
+Note: On Windows, remove `termion` from `--features` argument since termion doesn't support Windows.
 
 If you use [cargo-watch][], `cargo watch-check` and `cargo watch-test` aliases are useful to run checks/tests automatically
 on files being changed.

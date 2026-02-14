@@ -9,7 +9,7 @@ license = "MIT"
 bench = false
 
 [dependencies]
-ratatui-textarea = { path = "..", features = ["no-backend", "search"] }
+ratatui-textarea = { path = "..", default-features = false, features = ["search"] }
 ratatui = { version = "0.29.0", default-features = false }
 
 [dev-dependencies]

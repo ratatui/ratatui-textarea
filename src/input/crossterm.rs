@@ -1,5 +1,5 @@
 use super::{Input, Key};
-use crate::crossterm::event::{
+use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
 };
 
@@ -91,8 +91,8 @@ impl From<MouseEvent> for Input {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crossterm::event::KeyEventState;
     use crate::input::tests::input;
+    use crossterm::event::KeyEventState;
 
     fn key_event(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent {
