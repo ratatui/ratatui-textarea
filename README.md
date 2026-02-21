@@ -9,7 +9,7 @@
 > This project is a Ratatui fork of [tui-textarea] and maintained independently. See [this issue][ecosystem-issue] for details.
 
 [ratatui-textarea][crate] is a simple yet powerful text editor widget like `<textarea>` in HTML for [ratatui][].
-Multi-rline text editor can be easily put as part of your TUI application.
+Multi-line text editor can be easily put as part of your TUI application.
 
 **Features:**
 
@@ -26,7 +26,7 @@ Multi-rline text editor can be easily put as part of your TUI application.
 - Multiple textarea widgets in the same screen
 
 > [!warning]
-> This is a ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed. If you need tui-rs support, consider using the original crate.
+> This is a Ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed. If you need tui-rs support, consider using the original [tui-textarea] crate.
 [Documentation][doc]
 
 ## Examples
