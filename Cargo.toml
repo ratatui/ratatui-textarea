@@ -1,9 +1,9 @@
 [package]
 name = "ratatui-textarea"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.86.0"
-authors = ["rhysd <lin90162@yahoo.co.jp>"]
+authors = ["rhysd <lin90162@yahoo.co.jp>", "The Ratatui Developers"]
 description = """
 ratatui-textarea is a simple yet powerful text editor widget for ratatui.
 Multi-line text editor can be easily put as part of your TUI application.
