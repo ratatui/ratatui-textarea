@@ -25,8 +25,6 @@ Multi-line text editor can be easily put as part of your TUI application.
 - Backend agnostic. [crossterm][], [termion][], [termwiz][], and your own backend are all supported
 - Multiple textarea widgets in the same screen
 
-> [!warning]
-> This is a Ratatui-focused continuation of the original project. [tui-rs][] support is not guaranteed. If you need tui-rs support, consider using the original [tui-textarea] crate.
 [Documentation][doc]
 
 ## Examples
