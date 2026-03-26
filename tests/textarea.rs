@@ -1438,6 +1438,26 @@ fn test_delete_selection_before_insert() {
 }
 
 #[test]
+fn test_clear_empty() {
+    let mut t = TextArea::default();
+    assert!(!t.clear(), "clear on empty textarea should return false");
+    assert!(t.is_empty());
+}
+
+#[test]
+fn test_clear_with_undo_redo() {
+    let mut t = TextArea::from(["hello", "world"]);
+    assert!(t.clear());
+    assert!(t.is_empty());
+
+    t.undo();
+    assert_eq!(t.lines(), ["hello", "world"]);
+
+    t.redo();
+    assert!(t.is_empty());
+}
+
+#[test]
 fn test_undo_redo_stop_selection() {
     fn check(t: &mut TextArea, f: fn(&mut TextArea) -> bool) {
         t.move_cursor(CursorMove::Jump(0, 0));

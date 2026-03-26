@@ -1305,6 +1305,37 @@ impl<'a> TextArea<'a> {
         }
     }
 
+    /// Clear the entire content of the textarea, leaving it empty. The cursor position before calling this method
+    /// does not affect the result. This method integrates with the undo/redo history, so the content can be restored
+    /// with [`TextArea::undo`]. Returns `true` if any text was deleted, `false` if the textarea was already empty.
+    ///
+    /// ```
+    /// use ratatui_textarea::TextArea;
+    ///
+    /// let mut textarea = TextArea::from(["hello", "world"]);
+    ///
+    /// assert!(textarea.clear());
+    /// assert!(textarea.is_empty());
+    ///
+    /// textarea.undo();
+    /// assert_eq!(textarea.lines(), ["hello", "world"]);
+    /// ```
+    pub fn clear(&mut self) -> bool {
+        if self.is_empty() {
+            return false;
+        }
+        // Count all chars plus newlines between lines.
+        let total = self
+            .lines()
+            .iter()
+            .map(|l| l.chars().count())
+            .sum::<usize>()
+            + (self.lines().len() - 1);
+        self.move_cursor(CursorMove::Jump(0, 0));
+        self.delete_str(total);
+        true
+    }
+
     /// Paste a string previously deleted by [`TextArea::delete_line_by_head`], [`TextArea::delete_line_by_end`],
     /// [`TextArea::delete_word`], [`TextArea::delete_next_word`]. This method returns if some text was inserted or not
     /// in the textarea.

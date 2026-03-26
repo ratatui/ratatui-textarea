@@ -1,12 +1,15 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
 use crate::wrap::{WrapMode, cursor_visual_row, effective_wrap_width, wrapped_rows};
+#[cfg(feature = "portable-atomic")]
+use portable_atomic::{AtomicU64, Ordering};
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout::Rect;
 use ratatui_core::text::{Line, Span, Text};
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::paragraph::Paragraph;
 use std::cmp;
+#[cfg(not(feature = "portable-atomic"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 use unicode_width::UnicodeWidthChar;
 
@@ -214,5 +217,27 @@ impl Widget for &TextArea<'_> {
         self.viewport.store(top_row, top_col, width, height);
 
         inner.render(text_area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn viewport_store_and_load() {
+        let vp = Viewport::default();
+        vp.store(3, 7, 80, 24);
+        assert_eq!(vp.scroll_top(), (3, 7));
+        let (row, col, width, height) = vp.rect();
+        assert_eq!((row, col, width, height), (3, 7, 80, 24));
+    }
+
+    #[test]
+    fn viewport_clone() {
+        let vp = Viewport::default();
+        vp.store(5, 2, 40, 10);
+        let vp2 = vp.clone();
+        assert_eq!(vp2.scroll_top(), (5, 2));
     }
 }

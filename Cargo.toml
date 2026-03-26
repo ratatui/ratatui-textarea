@@ -26,6 +26,7 @@ termwiz = ["dep:ratatui-termwiz"]
 search = ["dep:regex"]
 serde = ["dep:serde"]
 arbitrary = ["dep:arbitrary"]
+portable-atomic = ["dep:portable-atomic"]
 
 [dependencies]
 arbitrary = { version = "1", features = ["derive"], optional = true }
@@ -35,6 +36,7 @@ ratatui-widgets = { version = "0.3.0" }
 ratatui-crossterm = { version = "0.1.0", optional = true }
 ratatui-termion = { version = "0.1.0", optional = true }
 ratatui-termwiz = { version = "0.1.0", optional = true }
+portable-atomic = { version = "1", optional = true }
 regex = { version = "1", optional = true }
 unicode-segmentation = "1.10.1"
 unicode-width = "0.2.0"
