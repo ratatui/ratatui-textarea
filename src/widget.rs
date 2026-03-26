@@ -1,5 +1,6 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
+use crate::wrap::{WrapMode, cursor_visual_row, effective_wrap_width, wrapped_rows};
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout::Rect;
 use ratatui_core::text::{Line, Span, Text};
@@ -107,6 +108,44 @@ impl<'a> TextArea<'a> {
         Text::from(Line::from(vec![cursor, text]))
     }
 
+    fn wrapped_text_widget(
+        &'a self,
+        prev_top_row: u16,
+        width: u16,
+        height: u16,
+    ) -> (Text<'a>, u16) {
+        if height == 0 {
+            return (Text::default(), prev_top_row);
+        }
+
+        let lines_len = self.lines().len();
+        let lnum_len = num_digits(lines_len);
+        let line_number_len = self.line_number_style().map(|_| lnum_len);
+        let wrap_width = effective_wrap_width(width, line_number_len);
+        let wrapped = wrapped_rows(
+            self.lines(),
+            self.wrap_mode(),
+            wrap_width,
+            self.tab_length(),
+        );
+        if wrapped.is_empty() {
+            return (Text::default(), 0);
+        }
+
+        let cursor_visual = cursor_visual_row(&wrapped, self.cursor());
+        let top_row = next_scroll_top(prev_top_row, cursor_visual as u16, height);
+        let top = top_row as usize;
+        let bottom = cmp::min(top + height as usize, wrapped.len());
+
+        let mut lines = Vec::with_capacity(bottom.saturating_sub(top));
+        for row in &wrapped[top..bottom] {
+            let line = &self.lines()[row.row];
+            lines.push(self.line_spans_segment(line, row, lnum_len));
+        }
+
+        (Text::from(lines), top_row)
+    }
+
     fn scroll_top_row(&self, prev_top: u16, height: u16) -> u16 {
         next_scroll_top(prev_top, self.cursor().0 as u16, height)
     }
@@ -140,14 +179,21 @@ impl Widget for &TextArea<'_> {
             area
         };
 
-        let (top_row, top_col) = self.viewport.scroll_top();
-        let top_row = self.scroll_top_row(top_row, height);
-        let top_col = self.scroll_top_col(top_col, width);
-
-        let (text, style) = if !self.placeholder.is_empty() && self.is_empty() {
-            (self.placeholder_widget(), self.placeholder_style)
+        let (prev_top_row, prev_top_col) = self.viewport.scroll_top();
+        let (text, style, top_row, top_col) = if !self.placeholder.is_empty() && self.is_empty() {
+            (self.placeholder_widget(), self.placeholder_style, 0, 0)
+        } else if self.wrap_mode() == WrapMode::None {
+            let top_row = self.scroll_top_row(prev_top_row, height);
+            let top_col = self.scroll_top_col(prev_top_col, width);
+            (
+                self.text_widget(top_row as _, height as _),
+                self.style(),
+                top_row,
+                top_col,
+            )
         } else {
-            (self.text_widget(top_row as _, height as _), self.style())
+            let (text, top_row) = self.wrapped_text_widget(prev_top_row, width, height);
+            (text, self.style(), top_row, 0)
         };
 
         // To get fine control over the text color and the surrrounding block they have to be rendered separately

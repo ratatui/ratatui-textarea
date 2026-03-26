@@ -2,6 +2,7 @@ use crate::widget::Viewport;
 use crate::word::{
     find_word_inclusive_end_forward, find_word_start_backward, find_word_start_forward,
 };
+use crate::wrap::{WrappedLine, cursor_at_visual_row, cursor_visual_row};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 #[cfg(feature = "serde")]
@@ -263,6 +264,7 @@ impl CursorMove {
         (row, col): (usize, usize),
         lines: &[String],
         viewport: &Viewport,
+        wrapped: Option<&[WrappedLine]>,
     ) -> Option<(usize, usize)> {
         use CursorMove::*;
 
@@ -280,9 +282,25 @@ impl CursorMove {
                 Some((row, lines[row].chars().count()))
             }
             Back => Some((row, col - 1)),
+            Up if wrapped.is_some() => {
+                let rows = wrapped.unwrap();
+                let visual = cursor_visual_row(rows, (row, col));
+                if visual == 0 {
+                    return None;
+                }
+                Some(cursor_at_visual_row(lines, rows, (row, col), visual - 1))
+            }
             Up => {
                 let row = row.checked_sub(1)?;
                 Some((row, fit_col(col, &lines[row])))
+            }
+            Down if wrapped.is_some() => {
+                let rows = wrapped.unwrap();
+                let visual = cursor_visual_row(rows, (row, col));
+                if visual >= rows.len() - 1 {
+                    return None;
+                }
+                Some(cursor_at_visual_row(lines, rows, (row, col), visual + 1))
             }
             Down => Some((row + 1, fit_col(col, lines.get(row + 1)?))),
             Head => Some((row, 0)),

@@ -5,15 +5,19 @@ use crate::input::{Input, Key};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
-use crate::util::{Pos, spaces};
+use crate::util::{Pos, num_digits, spaces};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
+use crate::wrap::{
+    WrapMode, WrappedLine, cursor_at_visual_row, cursor_visual_row, effective_wrap_width,
+    wrapped_rows,
+};
 use ratatui_core::layout::Alignment;
 use ratatui_core::style::{Color, Modifier, Style};
 use ratatui_core::text::Line;
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::block::Block;
-use std::cmp::Ordering;
+use std::cmp::{self, Ordering};
 use std::fmt;
 use unicode_width::UnicodeWidthChar as _;
 
@@ -118,6 +122,7 @@ pub struct TextArea<'a> {
     #[cfg(feature = "search")]
     search: Search,
     alignment: Alignment,
+    wrap_mode: WrapMode,
     pub(crate) placeholder: String,
     pub(crate) placeholder_style: Style,
     mask: Option<char>,
@@ -223,6 +228,7 @@ impl<'a> TextArea<'a> {
             #[cfg(feature = "search")]
             search: Search::default(),
             alignment: Alignment::Left,
+            wrap_mode: WrapMode::None,
             placeholder: String::new(),
             placeholder_style: Style::default().fg(Color::DarkGray),
             mask: None,
@@ -1530,7 +1536,29 @@ impl<'a> TextArea<'a> {
     }
 
     fn move_cursor_with_shift(&mut self, m: CursorMove, shift: bool) {
-        if let Some(cursor) = m.next_cursor(self.cursor, &self.lines, &self.viewport) {
+        let wrapped_storage;
+        let wrapped_ref = if self.wrap_mode != WrapMode::None {
+            let (_, _, width, _) = self.viewport.rect();
+            if width > 0 {
+                let line_number_len = self.line_number_style.map(|_| num_digits(self.lines.len()));
+                let wrap_width = effective_wrap_width(width, line_number_len);
+                wrapped_storage =
+                    wrapped_rows(&self.lines, self.wrap_mode, wrap_width, self.tab_len);
+                Some(wrapped_storage.as_slice())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let next = if m == CursorMove::InViewport && self.wrap_mode != WrapMode::None {
+            self.cursor_in_wrapped_viewport()
+        } else {
+            m.next_cursor(self.cursor, &self.lines, &self.viewport, wrapped_ref)
+        };
+
+        if let Some(cursor) = next {
             if shift {
                 if self.selection_start.is_none() {
                     self.start_selection();
@@ -1540,6 +1568,32 @@ impl<'a> TextArea<'a> {
             }
             self.cursor = cursor;
         }
+    }
+
+    fn cursor_in_wrapped_viewport(&self) -> Option<(usize, usize)> {
+        let (row_top, _, width, height) = self.viewport.rect();
+        if height == 0 {
+            return Some(self.cursor);
+        }
+
+        let line_number_len = self.line_number_style.map(|_| num_digits(self.lines.len()));
+        let wrap_width = effective_wrap_width(width, line_number_len);
+        let rows = wrapped_rows(&self.lines, self.wrap_mode, wrap_width, self.tab_len);
+        if rows.is_empty() {
+            return Some(self.cursor);
+        }
+
+        let cursor_visual = cursor_visual_row(&rows, self.cursor);
+        let row_top = row_top as usize;
+        let row_bottom = row_top + height.saturating_sub(1) as usize;
+        let target_visual = cursor_visual.clamp(row_top, row_bottom);
+
+        Some(cursor_at_visual_row(
+            &self.lines,
+            &rows,
+            self.cursor,
+            target_visual,
+        ))
     }
 
     /// Undo the last modification. This method returns if the undo modified text contents or not in the textarea.
@@ -1587,8 +1641,27 @@ impl<'a> TextArea<'a> {
     }
 
     pub(crate) fn line_spans<'b>(&'b self, line: &'b str, row: usize, lnum_len: u8) -> Line<'b> {
+        let wrapped = WrappedLine {
+            row,
+            start_byte: 0,
+            end_byte: line.len(),
+            start_col: 0,
+            end_col: line.chars().count(),
+            first_in_row: true,
+            last_in_row: true,
+        };
+        self.line_spans_segment(line, &wrapped, lnum_len)
+    }
+
+    pub(crate) fn line_spans_segment<'b>(
+        &'b self,
+        line: &'b str,
+        wrapped: &WrappedLine,
+        lnum_len: u8,
+    ) -> Line<'b> {
+        let fragment = &line[wrapped.start_byte..wrapped.end_byte];
         let mut hl = LineHighlighter::new(
-            line,
+            fragment,
             self.cursor_style,
             self.tab_len,
             self.mask,
@@ -1596,20 +1669,64 @@ impl<'a> TextArea<'a> {
         );
 
         if let Some(style) = self.line_number_style {
-            hl.line_number(row, lnum_len, style);
+            if wrapped.first_in_row {
+                hl.line_number(wrapped.row, lnum_len, style);
+            } else {
+                hl.line_number_placeholder(lnum_len, style);
+            }
         }
 
-        if row == self.cursor.0 {
-            hl.cursor_line(self.cursor.1, self.cursor_line_style);
+        if wrapped.row == self.cursor.0 {
+            hl.set_line_style(self.cursor_line_style);
+            let cursor_col = self.cursor.1;
+            let in_segment = if wrapped.last_in_row {
+                wrapped.start_col <= cursor_col && cursor_col <= wrapped.end_col
+            } else {
+                wrapped.start_col <= cursor_col && cursor_col < wrapped.end_col
+            };
+            if in_segment {
+                hl.cursor_line(cursor_col - wrapped.start_col, self.cursor_line_style);
+            }
         }
 
         #[cfg(feature = "search")]
         if let Some(matches) = self.search.matches(line) {
-            hl.search(matches, self.search.style);
+            let clipped = matches
+                .filter_map(|(start, end)| {
+                    let start = cmp::max(start, wrapped.start_byte);
+                    let end = cmp::min(end, wrapped.end_byte);
+                    (start < end).then_some((start - wrapped.start_byte, end - wrapped.start_byte))
+                })
+                .collect::<Vec<_>>();
+            if !clipped.is_empty() {
+                hl.search(clipped.into_iter(), self.search.style);
+            }
         }
 
         if let Some((start, end)) = self.selection_positions() {
-            hl.selection(row, start.row, start.offset, end.row, end.offset);
+            if wrapped.first_in_row && wrapped.last_in_row {
+                hl.selection(wrapped.row, start.row, start.offset, end.row, end.offset);
+            } else if start.row <= wrapped.row && wrapped.row <= end.row {
+                let start_off = if start.row == wrapped.row {
+                    start.offset
+                } else {
+                    0
+                };
+                let end_off = if end.row == wrapped.row {
+                    end.offset
+                } else {
+                    line.len()
+                };
+                let clipped_start = cmp::max(start_off, wrapped.start_byte);
+                let clipped_end = cmp::min(end_off, wrapped.end_byte);
+                let select_at_end =
+                    wrapped.last_in_row && clipped_end == wrapped.end_byte && wrapped.row < end.row;
+                hl.selection_segment(
+                    clipped_start.saturating_sub(wrapped.start_byte),
+                    clipped_end.saturating_sub(wrapped.start_byte),
+                    select_at_end,
+                );
+            }
         }
 
         hl.into_spans()
@@ -2113,6 +2230,16 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn alignment(&self) -> Alignment {
         self.alignment
+    }
+
+    /// Set the soft-wrap mode used when rendering text.
+    pub fn set_wrap_mode(&mut self, mode: WrapMode) {
+        self.wrap_mode = mode;
+    }
+
+    /// Get the current soft-wrap mode.
+    pub fn wrap_mode(&self) -> WrapMode {
+        self.wrap_mode
     }
 
     /// Check if the textarea has a empty content.

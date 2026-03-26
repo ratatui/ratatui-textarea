@@ -36,6 +36,7 @@ ratatui-crossterm = { version = "0.1.0", optional = true }
 ratatui-termion = { version = "0.1.0", optional = true }
 ratatui-termwiz = { version = "0.1.0", optional = true }
 regex = { version = "1", optional = true }
+unicode-segmentation = "1.10.1"
 unicode-width = "0.2.0"
 serde = { version = "1", optional = true , features = ["derive"] }
 
