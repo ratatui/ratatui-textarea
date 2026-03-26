@@ -1,8 +1,8 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
-use crate::wrap::{WrapMode, cursor_visual_row, effective_wrap_width, wrapped_rows};
 #[cfg(feature = "portable-atomic")]
 use portable_atomic::{AtomicU64, Ordering};
+use crate::wrap::WrapMode;
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout::Rect;
 use ratatui_core::text::{Line, Span, Text};
@@ -11,7 +11,6 @@ use ratatui_widgets::paragraph::Paragraph;
 use std::cmp;
 #[cfg(not(feature = "portable-atomic"))]
 use std::sync::atomic::{AtomicU64, Ordering};
-use unicode_width::UnicodeWidthChar;
 
 // &mut 'a (u16, u16, u16, u16) is not available since `render` method takes immutable reference of TextArea
 // instance. In the case, the TextArea instance cannot be accessed from any other objects since it is mutablly
@@ -95,12 +94,13 @@ fn next_scroll_top(prev_top: u16, cursor: u16, len: u16) -> u16 {
 
 impl<'a> TextArea<'a> {
     fn text_widget(&'a self, top_row: usize, height: usize) -> Text<'a> {
-        let lines_len = self.lines().len();
-        let lnum_len = num_digits(lines_len);
-        let bottom_row = cmp::min(top_row + height, lines_len);
+        let lnum_len = num_digits(self.lines().len());
+        let screen_lines = self.screen_lines.borrow();
+        let bottom_row = cmp::min(top_row + height, screen_lines.len());
         let mut lines = Vec::with_capacity(bottom_row - top_row);
-        for (i, line) in self.lines()[top_row..bottom_row].iter().enumerate() {
-            lines.push(self.line_spans(line.as_str(), top_row + i, lnum_len));
+        for row in &screen_lines[top_row..bottom_row] {
+            let line = &self.lines()[row.wrapped.row];
+            lines.push(self.line_spans_segment(line, &row.wrapped, lnum_len));
         }
         Text::from(lines)
     }
@@ -111,56 +111,12 @@ impl<'a> TextArea<'a> {
         Text::from(Line::from(vec![cursor, text]))
     }
 
-    fn wrapped_text_widget(
-        &'a self,
-        prev_top_row: u16,
-        width: u16,
-        height: u16,
-    ) -> (Text<'a>, u16) {
-        if height == 0 {
-            return (Text::default(), prev_top_row);
-        }
-
-        let lines_len = self.lines().len();
-        let lnum_len = num_digits(lines_len);
-        let line_number_len = self.line_number_style().map(|_| lnum_len);
-        let wrap_width = effective_wrap_width(width, line_number_len);
-        let wrapped = wrapped_rows(
-            self.lines(),
-            self.wrap_mode(),
-            wrap_width,
-            self.tab_length(),
-        );
-        if wrapped.is_empty() {
-            return (Text::default(), 0);
-        }
-
-        let cursor_visual = cursor_visual_row(&wrapped, self.cursor());
-        let top_row = next_scroll_top(prev_top_row, cursor_visual as u16, height);
-        let top = top_row as usize;
-        let bottom = cmp::min(top + height as usize, wrapped.len());
-
-        let mut lines = Vec::with_capacity(bottom.saturating_sub(top));
-        for row in &wrapped[top..bottom] {
-            let line = &self.lines()[row.row];
-            lines.push(self.line_spans_segment(line, row, lnum_len));
-        }
-
-        (Text::from(lines), top_row)
-    }
-
     fn scroll_top_row(&self, prev_top: u16, height: u16) -> u16 {
-        next_scroll_top(prev_top, self.cursor().0 as u16, height)
+        next_scroll_top(prev_top, self.screen_cursor().row as u16, height)
     }
 
     fn scroll_top_col(&self, prev_top: u16, width: u16) -> u16 {
-        let (row, col) = self.cursor();
-        // Adjust the cursor position to account for the display width of non-ASCII characters.
-        let mut cursor = self.lines()[row]
-            .chars()
-            .take(col)
-            .map(|c| c.width().unwrap_or(0))
-            .sum::<usize>() as u16;
+        let mut cursor = self.screen_cursor().col as u16;
         // Adjust the cursor position due to the width of line number.
         if self.line_number_style().is_some() {
             let lnum = num_digits(self.lines().len()) as u16 + 2; // `+ 2` for margins
@@ -176,27 +132,34 @@ impl<'a> TextArea<'a> {
 
 impl Widget for &TextArea<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let Rect { width, height, .. } = if let Some(b) = self.block() {
+        let inner_area = if let Some(b) = self.block() {
             b.inner(area)
         } else {
             area
         };
+        let Rect { width, height, .. } = inner_area;
+
+        if self.area.get() != inner_area {
+            self.area.set(inner_area);
+            self.screen_map_load();
+        }
 
         let (prev_top_row, prev_top_col) = self.viewport.scroll_top();
         let (text, style, top_row, top_col) = if !self.placeholder.is_empty() && self.is_empty() {
             (self.placeholder_widget(), self.placeholder_style, 0, 0)
-        } else if self.wrap_mode() == WrapMode::None {
+        } else {
             let top_row = self.scroll_top_row(prev_top_row, height);
-            let top_col = self.scroll_top_col(prev_top_col, width);
+            let top_col = if self.wrap_mode() == WrapMode::None {
+                self.scroll_top_col(prev_top_col, width)
+            } else {
+                0
+            };
             (
                 self.text_widget(top_row as _, height as _),
                 self.style(),
                 top_row,
                 top_col,
             )
-        } else {
-            let (text, top_row) = self.wrapped_text_widget(prev_top_row, width, height);
-            (text, self.style(), top_row, 0)
         };
 
         // To get fine control over the text color and the surrrounding block they have to be rendered separately

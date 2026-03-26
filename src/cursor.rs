@@ -1,8 +1,8 @@
+use crate::TextArea;
 use crate::widget::Viewport;
 use crate::word::{
     find_word_inclusive_end_forward, find_word_start_backward, find_word_start_forward,
 };
-use crate::wrap::{WrappedLine, cursor_at_visual_row, cursor_visual_row};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 #[cfg(feature = "serde")]
@@ -13,7 +13,7 @@ use std::cmp;
 ///
 /// This type is marked as `#[non_exhaustive]` since more variations may be supported in the future.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CursorMove {
@@ -258,132 +258,193 @@ pub enum CursorMove {
     InViewport,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DataCursor(pub usize, pub usize);
+
+impl DataCursor {
+    pub(crate) fn to_screen_cursor(self, ta: &TextArea) -> ScreenCursor {
+        ta.array_to_screen(self)
+    }
+}
+
+impl PartialEq<(usize, usize)> for DataCursor {
+    fn eq(&self, other: &(usize, usize)) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+
+impl From<(usize, usize)> for DataCursor {
+    fn from((row, col): (usize, usize)) -> Self {
+        Self(row, col)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ScreenCursor {
+    pub row: usize,
+    pub col: usize,
+    pub char: Option<char>,
+    pub dc: Option<DataCursor>,
+}
+
+impl ScreenCursor {
+    pub(crate) fn to_array_cursor(self, ta: &TextArea) -> DataCursor {
+        ta.screen_to_array(self)
+    }
+}
+
 impl CursorMove {
     pub(crate) fn next_cursor(
         &self,
-        (row, col): (usize, usize),
-        lines: &[String],
+        cursor: ScreenCursor,
+        ta: &TextArea,
         viewport: &Viewport,
-        wrapped: Option<&[WrappedLine]>,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<ScreenCursor> {
         use CursorMove::*;
-
-        fn fit_col(col: usize, line: &str) -> usize {
-            cmp::min(col, line.chars().count())
-        }
+        let row = cursor.row;
+        let col = cursor.col;
+        let dc = cursor.dc.unwrap_or_else(|| cursor.to_array_cursor(ta));
 
         match self {
-            Forward if col >= lines[row].chars().count() => {
-                (row + 1 < lines.len()).then(|| (row + 1, 0))
-            }
-            Forward => Some((row, col + 1)),
+            Forward if col >= ta.screen_line_width(row) => (row + 1 < ta.screen_lines_count())
+                .then(|| ScreenCursor {
+                    row: row + 1,
+                    col: 0,
+                    char: None,
+                    dc: None,
+                }),
+            Forward => Some(ta.increment_screen_cursor(cursor)),
             Back if col == 0 => {
                 let row = row.checked_sub(1)?;
-                Some((row, lines[row].chars().count()))
-            }
-            Back => Some((row, col - 1)),
-            Up if wrapped.is_some() => {
-                let rows = wrapped.unwrap();
-                let visual = cursor_visual_row(rows, (row, col));
-                if visual == 0 {
-                    return None;
-                }
-                Some(cursor_at_visual_row(lines, rows, (row, col), visual - 1))
+                Some(ScreenCursor {
+                    row,
+                    col: ta.screen_line_max_cursor_col(row),
+                    char: None,
+                    dc: None,
+                })
             }
             Up => {
                 let row = row.checked_sub(1)?;
-                Some((row, fit_col(col, &lines[row])))
+                Some(ScreenCursor {
+                    row,
+                    col: cmp::min(col, ta.screen_line_max_cursor_col(row)),
+                    char: None,
+                    dc: None,
+                })
             }
-            Down if wrapped.is_some() => {
-                let rows = wrapped.unwrap();
-                let visual = cursor_visual_row(rows, (row, col));
-                if visual >= rows.len() - 1 {
-                    return None;
+            Down => {
+                if row + 1 >= ta.screen_lines_count() {
+                    None
+                } else {
+                    Some(ScreenCursor {
+                        row: row + 1,
+                        col: cmp::min(col, ta.screen_line_max_cursor_col(row + 1)),
+                        char: None,
+                        dc: None,
+                    })
                 }
-                Some(cursor_at_visual_row(lines, rows, (row, col), visual + 1))
             }
-            Down => Some((row + 1, fit_col(col, lines.get(row + 1)?))),
-            Head => Some((row, 0)),
-            End => Some((row, lines[row].chars().count())),
-            Top => Some((0, fit_col(col, &lines[0]))),
+            Back => Some(ta.decrement_screen_cursor(cursor)),
+            Head => Some(DataCursor(dc.0, 0).to_screen_cursor(ta)),
+            End => Some(DataCursor(dc.0, ta.lines[dc.0].chars().count()).to_screen_cursor(ta)),
+            Top => Some(
+                DataCursor(0, cmp::min(dc.1, ta.lines[0].chars().count())).to_screen_cursor(ta),
+            ),
             Bottom => {
-                let row = lines.len() - 1;
-                Some((row, fit_col(col, &lines[row])))
+                let row = ta.lines.len() - 1;
+                let col = cmp::min(dc.1, ta.lines[row].chars().count());
+                Some(DataCursor(row, col).to_screen_cursor(ta))
             }
             WordEnd => {
                 // `+ 1` for not accepting the current cursor position
-                if let Some(col) = find_word_inclusive_end_forward(&lines[row], col + 1) {
-                    Some((row, col))
+                if let Some(col) = find_word_inclusive_end_forward(&ta.lines[dc.0], dc.1 + 1) {
+                    Some(DataCursor(dc.0, col).to_screen_cursor(ta))
                 } else {
-                    let mut row = row;
+                    let mut row = dc.0;
                     loop {
-                        if row == lines.len() - 1 {
-                            break Some((row, lines[row].chars().count()));
+                        if row == ta.lines.len() - 1 {
+                            break Some(
+                                DataCursor(row, ta.lines[row].chars().count()).to_screen_cursor(ta),
+                            );
                         }
                         row += 1;
-                        if let Some(col) = find_word_inclusive_end_forward(&lines[row], 0) {
-                            break Some((row, col));
+                        if let Some(col) = find_word_inclusive_end_forward(&ta.lines[row], 0) {
+                            break Some(DataCursor(row, col).to_screen_cursor(ta));
                         }
                     }
                 }
             }
             WordForward => {
-                if let Some(col) = find_word_start_forward(&lines[row], col) {
-                    Some((row, col))
-                } else if row + 1 < lines.len() {
-                    Some((row + 1, 0))
+                if let Some(col) = find_word_start_forward(&ta.lines[dc.0], dc.1) {
+                    Some(DataCursor(dc.0, col).to_screen_cursor(ta))
+                } else if dc.0 + 1 < ta.lines.len() {
+                    Some(DataCursor(dc.0 + 1, 0).to_screen_cursor(ta))
                 } else {
-                    Some((row, lines[row].chars().count()))
+                    Some(DataCursor(dc.0, ta.lines[dc.0].chars().count()).to_screen_cursor(ta))
                 }
             }
             WordBack => {
-                if let Some(col) = find_word_start_backward(&lines[row], col) {
-                    Some((row, col))
-                } else if row > 0 {
-                    Some((row - 1, lines[row - 1].chars().count()))
+                if let Some(col) = find_word_start_backward(&ta.lines[dc.0], dc.1) {
+                    Some(DataCursor(dc.0, col).to_screen_cursor(ta))
+                } else if dc.0 > 0 {
+                    let row = dc.0 - 1;
+                    Some(DataCursor(row, ta.lines[row].chars().count()).to_screen_cursor(ta))
                 } else {
-                    Some((row, 0))
+                    Some(DataCursor(dc.0, 0).to_screen_cursor(ta))
                 }
             }
             ParagraphForward => {
-                let mut prev_is_empty = lines[row].is_empty();
-                for row in row + 1..lines.len() {
-                    let line = &lines[row];
+                let mut prev_is_empty = ta.lines[dc.0].is_empty();
+                for row in dc.0 + 1..ta.lines.len() {
+                    let line = &ta.lines[row];
                     let is_empty = line.is_empty();
                     if !is_empty && prev_is_empty {
-                        return Some((row, fit_col(col, line)));
+                        let col = cmp::min(dc.1, line.chars().count());
+                        return Some(DataCursor(row, col).to_screen_cursor(ta));
                     }
                     prev_is_empty = is_empty;
                 }
-                let row = lines.len() - 1;
-                Some((row, fit_col(col, &lines[row])))
+                let row = ta.lines.len() - 1;
+                let col = cmp::min(dc.1, ta.lines[row].chars().count());
+                Some(DataCursor(row, col).to_screen_cursor(ta))
             }
             ParagraphBack => {
-                let row = row.checked_sub(1)?;
-                let mut prev_is_empty = lines[row].is_empty();
+                let row = dc.0.checked_sub(1)?;
+                let mut prev_is_empty = ta.lines[row].is_empty();
                 for row in (0..row).rev() {
-                    let is_empty = lines[row].is_empty();
+                    let is_empty = ta.lines[row].is_empty();
                     if is_empty && !prev_is_empty {
-                        return Some((row + 1, fit_col(col, &lines[row + 1])));
+                        let target = row + 1;
+                        let col = cmp::min(dc.1, ta.lines[target].chars().count());
+                        return Some(DataCursor(target, col).to_screen_cursor(ta));
                     }
                     prev_is_empty = is_empty;
                 }
-                Some((0, fit_col(col, &lines[0])))
+                let col = cmp::min(dc.1, ta.lines[0].chars().count());
+                Some(DataCursor(0, col).to_screen_cursor(ta))
             }
             Jump(row, col) => {
-                let row = cmp::min(*row as usize, lines.len() - 1);
-                let col = fit_col(*col as usize, &lines[row]);
-                Some((row, col))
+                let row = cmp::min(*row as usize, ta.lines.len() - 1);
+                let col = cmp::min(*col as usize, ta.lines[row].chars().count());
+                Some(DataCursor(row, col).to_screen_cursor(ta))
             }
             InViewport => {
                 let (row_top, col_top, row_bottom, col_bottom) = viewport.position();
 
                 let row = row.clamp(row_top as usize, row_bottom as usize);
-                let row = cmp::min(row, lines.len() - 1);
+                let row = cmp::min(row, ta.screen_lines_count() - 1);
                 let col = col.clamp(col_top as usize, col_bottom as usize);
-                let col = fit_col(col, &lines[row]);
-
-                Some((row, col))
+                let col = cmp::min(col, ta.screen_line_max_cursor_col(row));
+                Some(ScreenCursor {
+                    row,
+                    col,
+                    char: None,
+                    dc: None,
+                })
             }
         }
     }

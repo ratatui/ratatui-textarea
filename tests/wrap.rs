@@ -359,6 +359,56 @@ fn wrapped_cursor_column_clamped_to_shorter_visual_line() {
 }
 
 #[test]
+fn wrapped_cursor_down_preserves_visual_column_for_mixed_width_same_logical_line() {
+    let mut textarea = TextArea::from(["a中bcde"]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    render(&textarea, 4, 4);
+
+    // After `a中`, the data column is 2 but the visual column is 3.
+    textarea.move_cursor(CursorMove::Jump(0, 2));
+    assert_eq!(textarea.cursor(), (0, 2));
+    textarea.move_cursor(CursorMove::Down);
+    assert_eq!(textarea.cursor(), (0, 6));
+}
+
+#[test]
+fn wrapped_cursor_up_preserves_visual_column_for_mixed_width_same_logical_line() {
+    let mut textarea = TextArea::from(["a中bcde"]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    render(&textarea, 4, 4);
+
+    textarea.move_cursor(CursorMove::Jump(0, 6));
+    assert_eq!(textarea.cursor(), (0, 6));
+    textarea.move_cursor(CursorMove::Up);
+    assert_eq!(textarea.cursor(), (0, 2));
+}
+
+#[test]
+fn wrapped_cursor_down_preserves_visual_column_when_crossing_into_mixed_width_line() {
+    let mut textarea = TextArea::from(["abcd", "a中bcde"]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    render(&textarea, 4, 4);
+
+    // Visual column 3 in ASCII should land at visual column 3 in the mixed-width row.
+    textarea.move_cursor(CursorMove::Jump(0, 3));
+    assert_eq!(textarea.cursor(), (0, 3));
+    textarea.move_cursor(CursorMove::Down);
+    assert_eq!(textarea.cursor(), (1, 2));
+}
+
+#[test]
+fn wrapped_cursor_up_preserves_visual_column_when_crossing_out_of_mixed_width_line() {
+    let mut textarea = TextArea::from(["abcd", "a中bcde"]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    render(&textarea, 4, 4);
+
+    textarea.move_cursor(CursorMove::Jump(1, 2));
+    assert_eq!(textarea.cursor(), (1, 2));
+    textarea.move_cursor(CursorMove::Up);
+    assert_eq!(textarea.cursor(), (0, 3));
+}
+
+#[test]
 fn wrapped_cursor_down_up_with_word_wrap_mode() {
     let mut textarea = TextArea::from(["hello world"]);
     textarea.set_wrap_mode(WrapMode::Word);

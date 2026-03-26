@@ -76,53 +76,6 @@ pub(crate) fn wrapped_rows(
     rows
 }
 
-pub(crate) fn cursor_visual_row(rows: &[WrappedLine], cursor: (usize, usize)) -> usize {
-    let (cursor_row, cursor_col) = cursor;
-    let mut fallback = 0usize;
-    for (vrow, wrapped) in rows.iter().copied().enumerate() {
-        if wrapped.row != cursor_row {
-            continue;
-        }
-        fallback = vrow;
-        let contains = if wrapped.last_in_row {
-            wrapped.start_col <= cursor_col && cursor_col <= wrapped.end_col
-        } else {
-            wrapped.start_col <= cursor_col && cursor_col < wrapped.end_col
-        };
-        if contains {
-            return vrow;
-        }
-    }
-    fallback
-}
-
-pub(crate) fn cursor_at_visual_row(
-    lines: &[String],
-    rows: &[WrappedLine],
-    cursor: (usize, usize),
-    visual_row: usize,
-) -> (usize, usize) {
-    if rows.is_empty() {
-        return cursor;
-    }
-
-    let current_visual = cursor_visual_row(rows, cursor);
-    let current_wrapped = rows[current_visual.min(rows.len() - 1)];
-    let visual_col_offset = cursor.1.saturating_sub(current_wrapped.start_col);
-
-    let target = rows[visual_row.min(rows.len() - 1)];
-    let line_len = lines[target.row].chars().count();
-    let target_col = target.start_col + visual_col_offset;
-
-    let max_col = if target.last_in_row {
-        target.end_col
-    } else {
-        target.end_col.saturating_sub(1)
-    };
-    let col = target_col.min(line_len).clamp(target.start_col, max_col);
-    (target.row, col)
-}
-
 pub(crate) fn line_ranges(
     line: &str,
     mode: WrapMode,
@@ -322,5 +275,11 @@ mod tests {
     fn tab_width_is_accounted_for_in_wrap() {
         let have = segments("\tX", WrapMode::WordOrGlyph, 2);
         assert_eq!(have, vec!["\t", "X"]);
+    }
+
+    #[test]
+    fn glyph_wrap_preserves_full_mixed_width_row_capacity() {
+        let have = segments("a中bcde", WrapMode::Glyph, 4);
+        assert_eq!(have, vec!["a中b", "cde"]);
     }
 }

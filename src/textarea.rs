@@ -1,22 +1,22 @@
-use crate::cursor::CursorMove;
+use crate::cursor::{CursorMove, DataCursor, ScreenCursor};
 use crate::highlight::LineHighlighter;
 use crate::history::{Edit, EditKind, History};
 use crate::input::{Input, Key};
+use crate::screen_map::{DataLine, ScreenLine};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
-use crate::util::{Pos, num_digits, spaces};
+use crate::util::{Pos, spaces};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
-use crate::wrap::{
-    WrapMode, WrappedLine, cursor_at_visual_row, cursor_visual_row, effective_wrap_width,
-    wrapped_rows,
-};
+use crate::wrap::{WrapMode, WrappedLine};
 use ratatui_core::layout::Alignment;
+use ratatui_core::layout::Rect;
 use ratatui_core::style::{Color, Modifier, Style};
 use ratatui_core::text::Line;
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::block::Block;
+use std::cell::{Cell, RefCell};
 use std::cmp::{self, Ordering};
 use std::fmt;
 use unicode_width::UnicodeWidthChar as _;
@@ -107,10 +107,10 @@ impl fmt::Display for YankText {
 /// ```
 #[derive(Clone, Debug)]
 pub struct TextArea<'a> {
-    lines: Vec<String>,
+    pub(crate) lines: Vec<String>,
     block: Option<Block<'a>>,
     style: Style,
-    cursor: (usize, usize), // 0-base
+    cursor: DataCursor, // 0-base
     tab_len: u8,
     hard_tab_indent: bool,
     history: History,
@@ -126,8 +126,11 @@ pub struct TextArea<'a> {
     pub(crate) placeholder: String,
     pub(crate) placeholder_style: Style,
     mask: Option<char>,
-    selection_start: Option<(usize, usize)>,
+    selection_start: Option<DataCursor>,
     select_style: Style,
+    pub(crate) screen_lines: RefCell<Vec<ScreenLine>>,
+    pub(crate) data_pointers: RefCell<Vec<DataLine>>,
+    pub(crate) area: Cell<Rect>,
 }
 
 /// Convert any iterator whose elements can be converted into [`String`] into [`TextArea`]. Each [`String`] element is
@@ -198,6 +201,10 @@ impl Default for TextArea<'_> {
 }
 
 impl<'a> TextArea<'a> {
+    fn refresh_screen_map(&self) {
+        self.screen_map_load();
+    }
+
     /// Create [`TextArea`] instance with given lines. If you have value other than `Vec<String>`, [`TextArea::from`]
     /// may be more useful.
     /// ```
@@ -212,11 +219,11 @@ impl<'a> TextArea<'a> {
             lines.push(String::new());
         }
 
-        Self {
+        let textarea = Self {
             lines,
             block: None,
             style: Style::default(),
-            cursor: (0, 0),
+            cursor: DataCursor(0, 0),
             tab_len: 4,
             hard_tab_indent: false,
             history: History::new(50),
@@ -234,7 +241,12 @@ impl<'a> TextArea<'a> {
             mask: None,
             selection_start: None,
             select_style: Style::default().bg(Color::LightBlue),
-        }
+            screen_lines: RefCell::new(Vec::new()),
+            data_pointers: RefCell::new(Vec::new()),
+            area: Cell::new(Rect::default()),
+        };
+        textarea.screen_map_load();
+        textarea
     }
 
     /// Handle a key input with default key mappings. For default key mappings, see the table in
@@ -664,7 +676,7 @@ impl<'a> TextArea<'a> {
 
         // Check invariants
         debug_assert!(!self.lines.is_empty(), "no line after {:?}", input);
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         debug_assert!(
             self.lines.len() > r,
             "cursor {:?} exceeds max lines {} after {:?}",
@@ -745,10 +757,11 @@ impl<'a> TextArea<'a> {
     }
 
     fn push_history(&mut self, kind: EditKind, before: Pos, after_offset: usize) {
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let after = Pos::new(row, col, after_offset);
         let edit = Edit::new(kind, before, after);
         self.history.push(edit);
+        self.refresh_screen_map();
     }
 
     /// Insert a single character at current cursor position.
@@ -767,7 +780,7 @@ impl<'a> TextArea<'a> {
         }
 
         self.delete_selection(false);
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let i = line
             .char_indices()
@@ -813,7 +826,7 @@ impl<'a> TextArea<'a> {
     fn insert_chunk(&mut self, chunk: Vec<String>) -> bool {
         debug_assert!(chunk.len() > 1, "Chunk size must be > 1: {:?}", chunk);
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let i = line
             .char_indices()
@@ -826,7 +839,7 @@ impl<'a> TextArea<'a> {
             row + chunk.len() - 1,
             chunk[chunk.len() - 1].chars().count(),
         );
-        self.cursor = (row, col);
+        self.cursor = DataCursor(row, col);
 
         let end_offset = chunk.last().unwrap().len();
 
@@ -842,7 +855,7 @@ impl<'a> TextArea<'a> {
             return false;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         debug_assert!(
             !s.contains('\n'),
@@ -864,7 +877,7 @@ impl<'a> TextArea<'a> {
     }
 
     fn delete_range(&mut self, start: Pos, end: Pos, should_yank: bool) {
-        self.cursor = (start.row, start.col);
+        self.cursor = DataCursor(start.row, start.col);
 
         if start.row == end.row {
             let removed = self.lines[start.row]
@@ -930,7 +943,7 @@ impl<'a> TextArea<'a> {
             return false;
         }
 
-        let (start_row, start_col) = self.cursor;
+        let DataCursor(start_row, start_col) = self.cursor;
 
         let mut remaining = chars;
         let mut find_end = move |line: &str| {
@@ -1013,13 +1026,13 @@ impl<'a> TextArea<'a> {
             (s.len(), last_col + 1)
         }
 
-        let (row, _) = self.cursor;
+        let DataCursor(row, _) = self.cursor;
         let line = &mut self.lines[row];
         if let Some((i, _)) = line.char_indices().nth(col) {
             let (bytes, chars) = bytes_and_chars(chars, &line[i..]);
             let removed = line.drain(i..i + bytes).as_str().to_string();
 
-            self.cursor = (row, col);
+            self.cursor = DataCursor(row, col);
             self.push_history(
                 EditKind::DeleteStr(removed.clone()),
                 Pos::new(row, col + chars, i + bytes),
@@ -1057,7 +1070,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let width: usize = self.lines[row]
             .chars()
             .take(col)
@@ -1080,7 +1093,7 @@ impl<'a> TextArea<'a> {
     pub fn insert_newline(&mut self) {
         self.delete_selection(false);
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let offset = line
             .char_indices()
@@ -1091,7 +1104,7 @@ impl<'a> TextArea<'a> {
         line.truncate(offset);
 
         self.lines.insert(row + 1, next_line);
-        self.cursor = (row + 1, 0);
+        self.cursor = DataCursor(row + 1, 0);
         self.push_history(EditKind::InsertNewline, Pos::new(row, col, offset), 0);
     }
 
@@ -1111,7 +1124,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, _) = self.cursor;
+        let DataCursor(row, _) = self.cursor;
         if row == 0 {
             return false;
         }
@@ -1120,7 +1133,7 @@ impl<'a> TextArea<'a> {
         let prev_line = &mut self.lines[row - 1];
         let prev_line_end = prev_line.len();
 
-        self.cursor = (row - 1, prev_line.chars().count());
+        self.cursor = DataCursor(row - 1, prev_line.chars().count());
         prev_line.push_str(&line);
         self.push_history(EditKind::DeleteNewline, Pos::new(row, 0, 0), prev_line_end);
         true
@@ -1143,7 +1156,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         if col == 0 {
             return self.delete_newline();
         }
@@ -1258,7 +1271,7 @@ impl<'a> TextArea<'a> {
         if self.delete_selection(false) {
             return true;
         }
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         if let Some(col) = find_word_start_backward(&self.lines[r], c) {
             self.delete_piece(col, c - col)
         } else if c > 0 {
@@ -1288,7 +1301,7 @@ impl<'a> TextArea<'a> {
         if self.delete_selection(false) {
             return true;
         }
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         let line = &self.lines[r];
         if let Some(col) = find_word_exclusive_end_forward(line, c) {
             self.delete_piece(c, col - c)
@@ -1297,7 +1310,7 @@ impl<'a> TextArea<'a> {
             if c < end_col {
                 self.delete_piece(c, end_col - c)
             } else if r + 1 < self.lines.len() {
-                self.cursor = (r + 1, 0);
+                self.cursor = DataCursor(r + 1, 0);
                 self.delete_newline()
             } else {
                 false
@@ -1409,7 +1422,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn select_all(&mut self) {
         self.move_cursor(CursorMove::Jump(u16::MAX, u16::MAX));
-        self.selection_start = Some((0, 0));
+        self.selection_start = Some(DataCursor(0, 0));
     }
 
     /// Return if text selection is ongoing or not.
@@ -1468,8 +1481,8 @@ impl<'a> TextArea<'a> {
     }
 
     fn selection_positions(&self) -> Option<(Pos, Pos)> {
-        let (sr, sc) = self.selection_start?;
-        let (er, ec) = self.cursor;
+        let DataCursor(sr, sc) = self.selection_start?;
+        let DataCursor(er, ec) = self.cursor;
         let (so, eo) = (self.line_offset(sr, sc), self.line_offset(er, ec));
         let s = Pos::new(sr, sc, so);
         let e = Pos::new(er, ec, eo);
@@ -1567,29 +1580,9 @@ impl<'a> TextArea<'a> {
     }
 
     fn move_cursor_with_shift(&mut self, m: CursorMove, shift: bool) {
-        let wrapped_storage;
-        let wrapped_ref = if self.wrap_mode != WrapMode::None {
-            let (_, _, width, _) = self.viewport.rect();
-            if width > 0 {
-                let line_number_len = self.line_number_style.map(|_| num_digits(self.lines.len()));
-                let wrap_width = effective_wrap_width(width, line_number_len);
-                wrapped_storage =
-                    wrapped_rows(&self.lines, self.wrap_mode, wrap_width, self.tab_len);
-                Some(wrapped_storage.as_slice())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let next = m.next_cursor(self.screen_cursor(), self, &self.viewport);
 
-        let next = if m == CursorMove::InViewport && self.wrap_mode != WrapMode::None {
-            self.cursor_in_wrapped_viewport()
-        } else {
-            m.next_cursor(self.cursor, &self.lines, &self.viewport, wrapped_ref)
-        };
-
-        if let Some(cursor) = next {
+        if let Some(screen_cursor) = next {
             if shift {
                 if self.selection_start.is_none() {
                     self.start_selection();
@@ -1597,34 +1590,8 @@ impl<'a> TextArea<'a> {
             } else {
                 self.cancel_selection();
             }
-            self.cursor = cursor;
+            self.cursor = self.data_cursor(screen_cursor);
         }
-    }
-
-    fn cursor_in_wrapped_viewport(&self) -> Option<(usize, usize)> {
-        let (row_top, _, width, height) = self.viewport.rect();
-        if height == 0 {
-            return Some(self.cursor);
-        }
-
-        let line_number_len = self.line_number_style.map(|_| num_digits(self.lines.len()));
-        let wrap_width = effective_wrap_width(width, line_number_len);
-        let rows = wrapped_rows(&self.lines, self.wrap_mode, wrap_width, self.tab_len);
-        if rows.is_empty() {
-            return Some(self.cursor);
-        }
-
-        let cursor_visual = cursor_visual_row(&rows, self.cursor);
-        let row_top = row_top as usize;
-        let row_bottom = row_top + height.saturating_sub(1) as usize;
-        let target_visual = cursor_visual.clamp(row_top, row_bottom);
-
-        Some(cursor_at_visual_row(
-            &self.lines,
-            &rows,
-            self.cursor,
-            target_visual,
-        ))
     }
 
     /// Undo the last modification. This method returns if the undo modified text contents or not in the textarea.
@@ -1642,6 +1609,7 @@ impl<'a> TextArea<'a> {
         if let Some(cursor) = self.history.undo(&mut self.lines) {
             self.cancel_selection();
             self.cursor = cursor;
+            self.refresh_screen_map();
             true
         } else {
             false
@@ -1665,23 +1633,11 @@ impl<'a> TextArea<'a> {
         if let Some(cursor) = self.history.redo(&mut self.lines) {
             self.cancel_selection();
             self.cursor = cursor;
+            self.refresh_screen_map();
             true
         } else {
             false
         }
-    }
-
-    pub(crate) fn line_spans<'b>(&'b self, line: &'b str, row: usize, lnum_len: u8) -> Line<'b> {
-        let wrapped = WrappedLine {
-            row,
-            start_byte: 0,
-            end_byte: line.len(),
-            start_col: 0,
-            end_col: line.chars().count(),
-            first_in_row: true,
-            last_in_row: true,
-        };
-        self.line_spans_segment(line, &wrapped, lnum_len)
     }
 
     pub(crate) fn line_spans_segment<'b>(
@@ -1872,6 +1828,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn set_tab_length(&mut self, len: u8) {
         self.tab_len = len;
+        self.refresh_screen_map();
     }
 
     /// Get how many spaces are used for representing tab character. The default value is 4.
@@ -1978,6 +1935,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn set_line_number_style(&mut self, style: Style) {
         self.line_number_style = Some(style);
+        self.refresh_screen_map();
     }
 
     /// Remove the style of line number which was set by [`TextArea::set_line_number_style`]. After calling this
@@ -1994,6 +1952,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn remove_line_number(&mut self) {
         self.line_number_style = None;
+        self.refresh_screen_map();
     }
 
     /// Get the style of line number if set.
@@ -2184,8 +2143,12 @@ impl<'a> TextArea<'a> {
     ///
     /// assert_eq!(textarea.cursor(), (1, 1));
     /// ```
-    pub fn cursor(&self) -> (usize, usize) {
+    pub fn cursor(&self) -> DataCursor {
         self.cursor
+    }
+
+    pub fn screen_cursor(&self) -> ScreenCursor {
+        self.array_to_screen(self.cursor)
     }
 
     /// Get the current selection range as a pair of the start position and the end position. The range is bounded
@@ -2225,9 +2188,9 @@ impl<'a> TextArea<'a> {
     pub fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
         self.selection_start.map(|pos| {
             if pos > self.cursor {
-                (self.cursor, pos)
+                ((self.cursor.0, self.cursor.1), (pos.0, pos.1))
             } else {
-                (pos, self.cursor)
+                ((pos.0, pos.1), (self.cursor.0, self.cursor.1))
             }
         })
     }
@@ -2248,6 +2211,7 @@ impl<'a> TextArea<'a> {
             self.line_number_style = None;
         }
         self.alignment = alignment;
+        self.refresh_screen_map();
     }
 
     /// Get current text alignment. The default alignment is [`Alignment::Left`].
@@ -2266,6 +2230,7 @@ impl<'a> TextArea<'a> {
     /// Set the soft-wrap mode used when rendering text.
     pub fn set_wrap_mode(&mut self, mode: WrapMode) {
         self.wrap_mode = mode;
+        self.refresh_screen_map();
     }
 
     /// Get the current soft-wrap mode.
