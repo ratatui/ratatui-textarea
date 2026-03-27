@@ -1067,6 +1067,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1213,6 +1219,7 @@ name = "ratatui-textarea"
 version = "0.8.0"
 dependencies = [
  "arbitrary",
+ "portable-atomic",
  "ratatui-core",
  "ratatui-crossterm",
  "ratatui-termion",

@@ -55,6 +55,10 @@ name = "split"
 required-features = ["crossterm"]
 
 [[example]]
+name = "wrap"
+required-features = ["crossterm"]
+
+[[example]]
 name = "single_line"
 required-features = ["crossterm"]
 

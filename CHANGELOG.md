@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.0
+
+### 🚀 Features
+
+- Add wrapping support by @srothgan in [#123](https://github.com/ratatui/ratatui-textarea/pull/123)
+
+### 🚜 Refactor
+
+- Adopt screen/data cursor architecture for wrapped navigation by @srothgan in [#123](https://github.com/ratatui/ratatui-textarea/pull/123)
+
 ## 0.8.0 - 2026-02-21
 
 We're excited to announce the first version of **ratatui-textarea**! (fork of `tui-textarea`)
