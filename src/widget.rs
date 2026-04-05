@@ -1,8 +1,8 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
+use crate::wrap::WrapMode;
 #[cfg(feature = "portable-atomic")]
 use portable_atomic::{AtomicU64, Ordering};
-use crate::wrap::WrapMode;
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout::Rect;
 use ratatui_core::text::{Line, Span, Text};

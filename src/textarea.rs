@@ -2388,7 +2388,7 @@ impl<'a> TextArea<'a> {
     #[cfg_attr(docsrs, doc(cfg(feature = "search")))]
     pub fn search_forward(&mut self, match_cursor: bool) -> bool {
         if let Some(cursor) = self.search.forward(&self.lines, self.cursor, match_cursor) {
-            self.cursor = cursor;
+            self.cursor = cursor.into();
             true
         } else {
             false
@@ -2432,7 +2432,7 @@ impl<'a> TextArea<'a> {
     #[cfg_attr(docsrs, doc(cfg(feature = "search")))]
     pub fn search_back(&mut self, match_cursor: bool) -> bool {
         if let Some(cursor) = self.search.back(&self.lines, self.cursor, match_cursor) {
-            self.cursor = cursor;
+            self.cursor = cursor.into();
             true
         } else {
             false
