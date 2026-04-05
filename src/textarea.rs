@@ -66,9 +66,6 @@ impl fmt::Display for YankText {
 /// - [`TextArea::lines`] returns line texts.
 /// ```
 /// use ratatui_textarea::{TextArea, Input, Key};
-/// use ratatui::backend::CrosstermBackend;
-/// use ratatui::layout::{Constraint, Direction, Layout};
-/// use ratatui::Terminal;
 ///
 /// let mut textarea = TextArea::default();
 ///
@@ -82,7 +79,7 @@ impl fmt::Display for YankText {
 ///
 /// It implements [`ratatui_core::widgets::Widget`] trait so it can be rendered to a terminal screen via
 /// [`ratatui_core::terminal::Frame::render_widget`] method.
-/// ```no_run
+/// ```ignore
 /// use ratatui::backend::CrosstermBackend;
 /// use ratatui::layout::{Constraint, Direction, Layout};
 /// use ratatui::Terminal;
@@ -1453,7 +1450,7 @@ impl<'a> TextArea<'a> {
     /// Set the style used for text selection. The default style is light blue.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     ///
     /// let mut textarea = TextArea::default();
     ///
@@ -1468,7 +1465,7 @@ impl<'a> TextArea<'a> {
     /// Get the style used for text selection.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     ///
     /// let mut textarea = TextArea::default();
     ///
@@ -1726,7 +1723,7 @@ impl<'a> TextArea<'a> {
     ///
     /// This method was deprecated at v0.5.3 and is no longer necessary. Instead you can directly pass `&TextArea`
     /// reference to the `Frame::render_widget` method call.
-    /// ```no_run
+    /// ```ignore
     /// # use ratatui::layout::Rect;
     /// # use ratatui::Terminal;
     /// # use ratatui::widgets::Widget as _;
@@ -1762,7 +1759,7 @@ impl<'a> TextArea<'a> {
 
     /// Set the style of textarea. By default, textarea is not styled.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1782,7 +1779,8 @@ impl<'a> TextArea<'a> {
     /// Set the block of textarea. By default, no block is set.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::widgets::{Block, Borders};
+    /// use ratatui_widgets::block::Block;
+    /// use ratatui_widgets::borders::Borders;
     ///
     /// let mut textarea = TextArea::default();
     /// let block = Block::default().borders(Borders::ALL).title("Block Title");
@@ -1796,7 +1794,8 @@ impl<'a> TextArea<'a> {
     /// Remove the block of textarea which was set by [`TextArea::set_block`].
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::widgets::{Block, Borders};
+    /// use ratatui_widgets::block::Block;
+    /// use ratatui_widgets::borders::Borders;
     ///
     /// let mut textarea = TextArea::default();
     /// let block = Block::default().borders(Borders::ALL).title("Block Title");
@@ -1900,7 +1899,7 @@ impl<'a> TextArea<'a> {
     /// Set the style of line at cursor. By default, the cursor line is styled with underline. To stop styling the
     /// cursor line, set the default style.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1925,7 +1924,7 @@ impl<'a> TextArea<'a> {
     /// that line numbers are disabled by default. If you want to show line numbers but don't want to style them, set
     /// the default style.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1943,7 +1942,7 @@ impl<'a> TextArea<'a> {
     /// Remove the style of line number which was set by [`TextArea::set_line_number_style`]. After calling this
     /// method, Line numbers will no longer be shown.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2132,7 +2131,7 @@ impl<'a> TextArea<'a> {
     /// Set the style of cursor. By default, a cursor is rendered in the reversed color. Setting the same style as
     /// cursor line hides a cursor.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2256,7 +2255,7 @@ impl<'a> TextArea<'a> {
     /// Set text alignment. When [`Alignment::Center`] or [`Alignment::Right`] is set, line number is automatically
     /// disabled because those alignments don't work well with line numbers.
     /// ```
-    /// use ratatui::layout::Alignment;
+    /// use ratatui_core::layout::Alignment;
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2274,7 +2273,7 @@ impl<'a> TextArea<'a> {
 
     /// Get current text alignment. The default alignment is [`Alignment::Left`].
     /// ```
-    /// use ratatui::layout::Alignment;
+    /// use ratatui_core::layout::Alignment;
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2500,7 +2499,7 @@ impl<'a> TextArea<'a> {
     /// Get the text style at matches of text search. The default style is colored with blue in background.
     ///
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let textarea = TextArea::default();
@@ -2516,7 +2515,7 @@ impl<'a> TextArea<'a> {
     /// Set the text style at matches of text search. The default style is colored with blue in background.
     ///
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2537,9 +2536,9 @@ impl<'a> TextArea<'a> {
     /// the cursor position will be adjusted to stay in the viewport using the same logic as [`CursorMove::InViewport`].
     ///
     /// ```
-    /// # use ratatui::buffer::Buffer;
-    /// # use ratatui::layout::Rect;
-    /// # use ratatui::widgets::Widget as _;
+    /// # use ratatui_core::buffer::Buffer;
+    /// # use ratatui_core::layout::Rect;
+    /// # use ratatui_core::widgets::Widget as _;
     /// use ratatui_textarea::TextArea;
     ///
     /// // Let's say terminal height is 8.

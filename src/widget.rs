@@ -172,12 +172,11 @@ impl Widget for &TextArea<'_> {
             b.render(area, buf)
         }
         if top_col != 0 {
-            inner = inner.scroll((0, top_col as u16));
+            inner = inner.scroll((0, top_col));
         }
 
         // Store scroll top position for rendering on the next tick
-        self.viewport
-            .store(top_row as u16, top_col as u16, width, height);
+        self.viewport.store(top_row, top_col, width, height);
 
         inner.render(text_area, buf);
     }

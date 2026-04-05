@@ -197,8 +197,8 @@ impl Editor<'_> {
                 let modified = if buffer.modified { " [modified]" } else { "" };
                 let slot = format!("[{}/{}]", self.current + 1, self.buffers.len());
                 let path = format!(" {}{} ", buffer.path.display(), modified);
-                let (row, col) = textarea.cursor();
-                let cursor = format!("({},{})", row + 1, col + 1);
+                let cursor_pos = textarea.cursor();
+                let cursor = format!("({},{})", cursor_pos.0 + 1, cursor_pos.1 + 1);
                 let status_chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(
