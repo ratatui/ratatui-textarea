@@ -1,3 +1,4 @@
+use crate::cursor::DataCursor;
 use ratatui_core::style::{Color, Style};
 use regex::Regex;
 
@@ -38,7 +39,7 @@ impl Search {
     pub fn forward(
         &mut self,
         lines: &[String],
-        cursor: (usize, usize),
+        cursor: DataCursor,
         match_cursor: bool,
     ) -> Option<(usize, usize)> {
         let pat = if let Some(pat) = &self.pat {
@@ -46,7 +47,7 @@ impl Search {
         } else {
             return None;
         };
-        let (row, col) = cursor;
+        let DataCursor(row, col) = cursor;
         let current_line = &lines[row];
 
         // Search current line after cursor
@@ -94,7 +95,7 @@ impl Search {
     pub fn back(
         &mut self,
         lines: &[String],
-        cursor: (usize, usize),
+        cursor: DataCursor,
         match_cursor: bool,
     ) -> Option<(usize, usize)> {
         let pat = if let Some(pat) = &self.pat {
@@ -102,7 +103,7 @@ impl Search {
         } else {
             return None;
         };
-        let (row, col) = cursor;
+        let DataCursor(row, col) = cursor;
         let current_line = &lines[row];
 
         // Search current line before cursor

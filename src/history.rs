@@ -1,3 +1,4 @@
+use crate::cursor::DataCursor;
 use crate::util::Pos;
 use std::collections::VecDeque;
 
@@ -113,12 +114,12 @@ impl Edit {
         self.kind.invert().apply(lines, &self.after, &self.before); // Undo is redo of inverted edit
     }
 
-    pub fn cursor_before(&self) -> (usize, usize) {
-        (self.before.row, self.before.col)
+    pub fn cursor_before(&self) -> DataCursor {
+        DataCursor(self.before.row, self.before.col)
     }
 
-    pub fn cursor_after(&self) -> (usize, usize) {
-        (self.after.row, self.after.col)
+    pub fn cursor_after(&self) -> DataCursor {
+        DataCursor(self.after.row, self.after.col)
     }
 }
 
@@ -156,7 +157,7 @@ impl History {
         self.edits.push_back(edit);
     }
 
-    pub fn redo(&mut self, lines: &mut Vec<String>) -> Option<(usize, usize)> {
+    pub fn redo(&mut self, lines: &mut Vec<String>) -> Option<DataCursor> {
         if self.index == self.edits.len() {
             return None;
         }
@@ -166,7 +167,7 @@ impl History {
         Some(edit.cursor_after())
     }
 
-    pub fn undo(&mut self, lines: &mut Vec<String>) -> Option<(usize, usize)> {
+    pub fn undo(&mut self, lines: &mut Vec<String>) -> Option<DataCursor> {
         self.index = self.index.checked_sub(1)?;
         let edit = &self.edits[self.index];
         edit.undo(lines);

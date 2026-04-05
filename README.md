@@ -18,6 +18,7 @@ Multi-line text editor can be easily put as part of your TUI application.
 - Undo/Redo
 - Line number
 - Cursor line highlight
+- Soft wrapping with character and word wrap modes
 - Search with regular expressions
 - Text selection
 - Mouse scrolling
@@ -70,6 +71,16 @@ cargo run --example split
 Two split textareas in a screen and switch them. An example for multiple textarea instances.
 
 <img src="https://raw.githubusercontent.com/rhysd/ss/master/tui-textarea/split.gif" width=539 height=124 alt="multiple textareas example">
+
+### [`wrap`](./examples/wrap.rs)
+
+```sh
+cargo run --example wrap
+```
+
+Two split textareas showing character and word wrapping side by side.
+
+<img src="./assets/example-wrap.gif" width=500 height=125 alt="wrap example">
 
 ### [`variable`](./examples/variable.rs)
 

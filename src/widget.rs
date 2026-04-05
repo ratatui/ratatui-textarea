@@ -1,5 +1,6 @@
 use crate::textarea::TextArea;
 use crate::util::num_digits;
+use crate::wrap::WrapMode;
 #[cfg(feature = "portable-atomic")]
 use portable_atomic::{AtomicU64, Ordering};
 use ratatui_core::buffer::Buffer;
@@ -10,7 +11,6 @@ use ratatui_widgets::paragraph::Paragraph;
 use std::cmp;
 #[cfg(not(feature = "portable-atomic"))]
 use std::sync::atomic::{AtomicU64, Ordering};
-use unicode_width::UnicodeWidthChar;
 
 // &mut 'a (u16, u16, u16, u16) is not available since `render` method takes immutable reference of TextArea
 // instance. In the case, the TextArea instance cannot be accessed from any other objects since it is mutablly
@@ -93,18 +93,24 @@ fn next_scroll_top(prev_top: u16, cursor: u16, len: u16) -> u16 {
 }
 
 impl<'a> TextArea<'a> {
+    fn text_widget(&'a self, top_row: usize, height: usize) -> Text<'a> {
+        let lnum_len = num_digits(self.lines().len());
+        let screen_lines = self.screen_lines.borrow();
+        let bottom_row = cmp::min(top_row + height, screen_lines.len());
+        let mut lines = Vec::with_capacity(bottom_row - top_row);
+        for row in &screen_lines[top_row..bottom_row] {
+            let line = &self.lines()[row.wrapped.row];
+            lines.push(self.line_spans_segment(line, &row.wrapped, lnum_len));
+        }
+        Text::from(lines)
+    }
+
     fn scroll_top_row(&self, prev_top: u16, height: u16) -> u16 {
-        next_scroll_top(prev_top, self.cursor().0 as u16, height)
+        next_scroll_top(prev_top, self.screen_cursor().row as u16, height)
     }
 
     fn scroll_top_col(&self, prev_top: u16, width: u16) -> u16 {
-        let (row, col) = self.cursor();
-        // Adjust the cursor position to account for the display width of non-ASCII characters.
-        let mut cursor = self.lines()[row]
-            .chars()
-            .take(col)
-            .map(|c| c.width().unwrap_or(0))
-            .sum::<usize>() as u16;
+        let mut cursor = self.screen_cursor().col as u16;
         // Adjust the cursor position due to the width of line number.
         if self.line_number_style().is_some() {
             let lnum = num_digits(self.lines().len()) as u16 + 2; // `+ 2` for margins
@@ -120,17 +126,20 @@ impl<'a> TextArea<'a> {
 
 impl Widget for &TextArea<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let Rect { width, height, .. } = if let Some(b) = self.block() {
+        let inner_area = if let Some(b) = self.block() {
             b.inner(area)
         } else {
             area
         };
+        let Rect { width, height, .. } = inner_area;
 
-        let (top_row, top_col) = self.viewport.scroll_top();
-        let top_row = self.scroll_top_row(top_row, height) as usize;
-        let top_col = self.scroll_top_col(top_col, width) as usize;
+        if self.area.get() != inner_area {
+            self.area.set(inner_area);
+            self.screen_map_load();
+        }
 
-        let text = if self.is_empty() && !self.placeholder.lines.is_empty() {
+        let (prev_top_row, prev_top_col) = self.viewport.scroll_top();
+        let (text, top_row, top_col) = if self.is_empty() && !self.placeholder.lines.is_empty() {
             let mut placeholder = self.placeholder.clone();
             let cursor = Span::styled(" ", self.cursor_style);
             if let Some(first_line) = placeholder.lines.first_mut() {
@@ -138,16 +147,20 @@ impl Widget for &TextArea<'_> {
             } else {
                 placeholder.lines.push(Line::from(vec![cursor]));
             }
-            placeholder
+            (placeholder, 0u16, 0u16)
         } else {
-            let lines_len = self.lines().len();
-            let lnum_len = num_digits(lines_len);
-            let bottom_row = cmp::min(top_row + height as usize, lines_len);
-            let mut lines = Vec::with_capacity(bottom_row - top_row);
-            for (i, line) in self.lines()[top_row..bottom_row].iter().enumerate() {
-                lines.push(self.line_spans(line.as_str(), top_row + i, lnum_len));
-            }
-            Text::from(lines).style(self.style())
+            let top_row = self.scroll_top_row(prev_top_row, height);
+            let top_col = if self.wrap_mode() == WrapMode::None {
+                self.scroll_top_col(prev_top_col, width)
+            } else {
+                0
+            };
+            (
+                self.text_widget(top_row as _, height as _)
+                    .style(self.style()),
+                top_row,
+                top_col,
+            )
         };
 
         // To get fine control over the text color and the surrrounding block they have to be rendered separately
@@ -159,12 +172,11 @@ impl Widget for &TextArea<'_> {
             b.render(area, buf)
         }
         if top_col != 0 {
-            inner = inner.scroll((0, top_col as u16));
+            inner = inner.scroll((0, top_col));
         }
 
         // Store scroll top position for rendering on the next tick
-        self.viewport
-            .store(top_row as u16, top_col as u16, width, height);
+        self.viewport.store(top_row, top_col, width, height);
 
         inner.render(text_area, buf);
     }

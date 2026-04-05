@@ -8,6 +8,7 @@ mod cursor;
 mod highlight;
 mod history;
 mod input;
+mod screen_map;
 mod scroll;
 #[cfg(feature = "search")]
 mod search;
@@ -15,8 +16,10 @@ mod textarea;
 mod util;
 mod widget;
 mod word;
+mod wrap;
 
-pub use cursor::CursorMove;
+pub use cursor::{CursorMove, DataCursor, ScreenCursor};
 pub use input::{Input, Key};
 pub use scroll::Scrolling;
 pub use textarea::TextArea;
+pub use wrap::WrapMode;

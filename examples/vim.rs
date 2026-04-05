@@ -89,8 +89,8 @@ impl Vim {
     }
 
     fn is_before_line_end(textarea: &TextArea<'_>) -> bool {
-        let (row, col) = textarea.cursor();
-        col < textarea.lines()[row].len().saturating_sub(1)
+        let cursor = textarea.cursor();
+        cursor.1 < textarea.lines()[cursor.0].len().saturating_sub(1)
     }
 
     fn transition(&self, input: Input, textarea: &mut TextArea<'_>) -> Transition {

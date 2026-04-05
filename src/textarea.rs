@@ -1,19 +1,23 @@
-use crate::cursor::CursorMove;
+use crate::cursor::{CursorMove, DataCursor, ScreenCursor};
 use crate::highlight::LineHighlighter;
 use crate::history::{Edit, EditKind, History};
 use crate::input::{Input, Key};
+use crate::screen_map::{DataLine, ScreenLine};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
 use crate::util::{Pos, spaces};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
+use crate::wrap::{WrapMode, WrappedLine};
 use ratatui_core::layout::Alignment;
+use ratatui_core::layout::Rect;
 use ratatui_core::style::{Color, Modifier, Style, Stylize};
 use ratatui_core::text::{Line, Text};
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::block::Block;
-use std::cmp::Ordering;
+use std::cell::{Cell, RefCell};
+use std::cmp::{self, Ordering};
 use std::fmt;
 use unicode_width::UnicodeWidthChar as _;
 
@@ -62,9 +66,6 @@ impl fmt::Display for YankText {
 /// - [`TextArea::lines`] returns line texts.
 /// ```
 /// use ratatui_textarea::{TextArea, Input, Key};
-/// use ratatui::backend::CrosstermBackend;
-/// use ratatui::layout::{Constraint, Direction, Layout};
-/// use ratatui::Terminal;
 ///
 /// let mut textarea = TextArea::default();
 ///
@@ -78,7 +79,7 @@ impl fmt::Display for YankText {
 ///
 /// It implements [`ratatui_core::widgets::Widget`] trait so it can be rendered to a terminal screen via
 /// [`ratatui_core::terminal::Frame::render_widget`] method.
-/// ```no_run
+/// ```ignore
 /// use ratatui::backend::CrosstermBackend;
 /// use ratatui::layout::{Constraint, Direction, Layout};
 /// use ratatui::Terminal;
@@ -103,10 +104,10 @@ impl fmt::Display for YankText {
 /// ```
 #[derive(Clone, Debug)]
 pub struct TextArea<'a> {
-    lines: Vec<String>,
+    pub(crate) lines: Vec<String>,
     block: Option<Block<'a>>,
     style: Style,
-    cursor: (usize, usize), // 0-base
+    cursor: DataCursor, // 0-base
     tab_len: u8,
     hard_tab_indent: bool,
     history: History,
@@ -118,10 +119,14 @@ pub struct TextArea<'a> {
     #[cfg(feature = "search")]
     search: Search,
     alignment: Alignment,
+    wrap_mode: WrapMode,
     pub(crate) placeholder: Text<'a>,
     mask: Option<char>,
-    selection_start: Option<(usize, usize)>,
+    selection_start: Option<DataCursor>,
     select_style: Style,
+    pub(crate) screen_lines: RefCell<Vec<ScreenLine>>,
+    pub(crate) data_pointers: RefCell<Vec<DataLine>>,
+    pub(crate) area: Cell<Rect>,
 }
 
 /// Convert any iterator whose elements can be converted into [`String`] into [`TextArea`]. Each [`String`] element is
@@ -192,6 +197,10 @@ impl Default for TextArea<'_> {
 }
 
 impl<'a> TextArea<'a> {
+    fn refresh_screen_map(&self) {
+        self.screen_map_load();
+    }
+
     /// Create [`TextArea`] instance with given lines. If you have value other than `Vec<String>`, [`TextArea::from`]
     /// may be more useful.
     /// ```
@@ -206,11 +215,11 @@ impl<'a> TextArea<'a> {
             lines.push(String::new());
         }
 
-        Self {
+        let textarea = Self {
             lines,
             block: None,
             style: Style::default(),
-            cursor: (0, 0),
+            cursor: DataCursor(0, 0),
             tab_len: 4,
             hard_tab_indent: false,
             history: History::new(50),
@@ -222,11 +231,17 @@ impl<'a> TextArea<'a> {
             #[cfg(feature = "search")]
             search: Search::default(),
             alignment: Alignment::Left,
+            wrap_mode: WrapMode::None,
             placeholder: Text::default().fg(Color::DarkGray),
             mask: None,
             selection_start: None,
             select_style: Style::default().bg(Color::LightBlue),
-        }
+            screen_lines: RefCell::new(Vec::new()),
+            data_pointers: RefCell::new(Vec::new()),
+            area: Cell::new(Rect::default()),
+        };
+        textarea.screen_map_load();
+        textarea
     }
 
     /// Handle a key input with default key mappings. For default key mappings, see the table in
@@ -656,7 +671,7 @@ impl<'a> TextArea<'a> {
 
         // Check invariants
         debug_assert!(!self.lines.is_empty(), "no line after {:?}", input);
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         debug_assert!(
             self.lines.len() > r,
             "cursor {:?} exceeds max lines {} after {:?}",
@@ -737,10 +752,11 @@ impl<'a> TextArea<'a> {
     }
 
     fn push_history(&mut self, kind: EditKind, before: Pos, after_offset: usize) {
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let after = Pos::new(row, col, after_offset);
         let edit = Edit::new(kind, before, after);
         self.history.push(edit);
+        self.refresh_screen_map();
     }
 
     /// Insert a single character at current cursor position.
@@ -759,7 +775,7 @@ impl<'a> TextArea<'a> {
         }
 
         self.delete_selection(false);
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let i = line
             .char_indices()
@@ -805,7 +821,7 @@ impl<'a> TextArea<'a> {
     fn insert_chunk(&mut self, chunk: Vec<String>) -> bool {
         debug_assert!(chunk.len() > 1, "Chunk size must be > 1: {:?}", chunk);
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let i = line
             .char_indices()
@@ -818,7 +834,7 @@ impl<'a> TextArea<'a> {
             row + chunk.len() - 1,
             chunk[chunk.len() - 1].chars().count(),
         );
-        self.cursor = (row, col);
+        self.cursor = DataCursor(row, col);
 
         let end_offset = chunk.last().unwrap().len();
 
@@ -834,7 +850,7 @@ impl<'a> TextArea<'a> {
             return false;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         debug_assert!(
             !s.contains('\n'),
@@ -856,7 +872,7 @@ impl<'a> TextArea<'a> {
     }
 
     fn delete_range(&mut self, start: Pos, end: Pos, should_yank: bool) {
-        self.cursor = (start.row, start.col);
+        self.cursor = DataCursor(start.row, start.col);
 
         if start.row == end.row {
             let removed = self.lines[start.row]
@@ -922,7 +938,7 @@ impl<'a> TextArea<'a> {
             return false;
         }
 
-        let (start_row, start_col) = self.cursor;
+        let DataCursor(start_row, start_col) = self.cursor;
 
         let mut remaining = chars;
         let mut find_end = move |line: &str| {
@@ -1005,13 +1021,13 @@ impl<'a> TextArea<'a> {
             (s.len(), last_col + 1)
         }
 
-        let (row, _) = self.cursor;
+        let DataCursor(row, _) = self.cursor;
         let line = &mut self.lines[row];
         if let Some((i, _)) = line.char_indices().nth(col) {
             let (bytes, chars) = bytes_and_chars(chars, &line[i..]);
             let removed = line.drain(i..i + bytes).as_str().to_string();
 
-            self.cursor = (row, col);
+            self.cursor = DataCursor(row, col);
             self.push_history(
                 EditKind::DeleteStr(removed.clone()),
                 Pos::new(row, col + chars, i + bytes),
@@ -1049,7 +1065,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let width: usize = self.lines[row]
             .chars()
             .take(col)
@@ -1072,7 +1088,7 @@ impl<'a> TextArea<'a> {
     pub fn insert_newline(&mut self) {
         self.delete_selection(false);
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         let line = &mut self.lines[row];
         let offset = line
             .char_indices()
@@ -1083,7 +1099,7 @@ impl<'a> TextArea<'a> {
         line.truncate(offset);
 
         self.lines.insert(row + 1, next_line);
-        self.cursor = (row + 1, 0);
+        self.cursor = DataCursor(row + 1, 0);
         self.push_history(EditKind::InsertNewline, Pos::new(row, col, offset), 0);
     }
 
@@ -1103,7 +1119,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, _) = self.cursor;
+        let DataCursor(row, _) = self.cursor;
         if row == 0 {
             return false;
         }
@@ -1112,7 +1128,7 @@ impl<'a> TextArea<'a> {
         let prev_line = &mut self.lines[row - 1];
         let prev_line_end = prev_line.len();
 
-        self.cursor = (row - 1, prev_line.chars().count());
+        self.cursor = DataCursor(row - 1, prev_line.chars().count());
         prev_line.push_str(&line);
         self.push_history(EditKind::DeleteNewline, Pos::new(row, 0, 0), prev_line_end);
         true
@@ -1135,7 +1151,7 @@ impl<'a> TextArea<'a> {
             return true;
         }
 
-        let (row, col) = self.cursor;
+        let DataCursor(row, col) = self.cursor;
         if col == 0 {
             return self.delete_newline();
         }
@@ -1250,7 +1266,7 @@ impl<'a> TextArea<'a> {
         if self.delete_selection(false) {
             return true;
         }
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         if let Some(col) = find_word_start_backward(&self.lines[r], c) {
             self.delete_piece(col, c - col)
         } else if c > 0 {
@@ -1280,7 +1296,7 @@ impl<'a> TextArea<'a> {
         if self.delete_selection(false) {
             return true;
         }
-        let (r, c) = self.cursor;
+        let DataCursor(r, c) = self.cursor;
         let line = &self.lines[r];
         if let Some(col) = find_word_exclusive_end_forward(line, c) {
             self.delete_piece(c, col - c)
@@ -1289,7 +1305,7 @@ impl<'a> TextArea<'a> {
             if c < end_col {
                 self.delete_piece(c, end_col - c)
             } else if r + 1 < self.lines.len() {
-                self.cursor = (r + 1, 0);
+                self.cursor = DataCursor(r + 1, 0);
                 self.delete_newline()
             } else {
                 false
@@ -1401,7 +1417,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn select_all(&mut self) {
         self.move_cursor(CursorMove::Jump(u16::MAX, u16::MAX));
-        self.selection_start = Some((0, 0));
+        self.selection_start = Some(DataCursor(0, 0));
     }
 
     /// Return if text selection is ongoing or not.
@@ -1434,7 +1450,7 @@ impl<'a> TextArea<'a> {
     /// Set the style used for text selection. The default style is light blue.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     ///
     /// let mut textarea = TextArea::default();
     ///
@@ -1449,7 +1465,7 @@ impl<'a> TextArea<'a> {
     /// Get the style used for text selection.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     ///
     /// let mut textarea = TextArea::default();
     ///
@@ -1460,8 +1476,8 @@ impl<'a> TextArea<'a> {
     }
 
     fn selection_positions(&self) -> Option<(Pos, Pos)> {
-        let (sr, sc) = self.selection_start?;
-        let (er, ec) = self.cursor;
+        let DataCursor(sr, sc) = self.selection_start?;
+        let DataCursor(er, ec) = self.cursor;
         let (so, eo) = (self.line_offset(sr, sc), self.line_offset(er, ec));
         let s = Pos::new(sr, sc, so);
         let e = Pos::new(er, ec, eo);
@@ -1559,7 +1575,9 @@ impl<'a> TextArea<'a> {
     }
 
     fn move_cursor_with_shift(&mut self, m: CursorMove, shift: bool) {
-        if let Some(cursor) = m.next_cursor(self.cursor, &self.lines, &self.viewport) {
+        let next = m.next_cursor(self.screen_cursor(), self, &self.viewport);
+
+        if let Some(screen_cursor) = next {
             if shift {
                 if self.selection_start.is_none() {
                     self.start_selection();
@@ -1567,7 +1585,7 @@ impl<'a> TextArea<'a> {
             } else {
                 self.cancel_selection();
             }
-            self.cursor = cursor;
+            self.cursor = self.data_cursor(screen_cursor);
         }
     }
 
@@ -1587,7 +1605,8 @@ impl<'a> TextArea<'a> {
             self.cancel_selection();
             let row = cursor.0.min(self.lines.len().saturating_sub(1));
             let col = cursor.1.min(self.lines[row].chars().count());
-            self.cursor = (row, col);
+            self.cursor = (row, col).into();
+            self.refresh_screen_map();
             true
         } else {
             false
@@ -1612,16 +1631,23 @@ impl<'a> TextArea<'a> {
             self.cancel_selection();
             let row = cursor.0.min(self.lines.len().saturating_sub(1));
             let col = cursor.1.min(self.lines[row].chars().count());
-            self.cursor = (row, col);
+            self.cursor = (row, col).into();
+            self.refresh_screen_map();
             true
         } else {
             false
         }
     }
 
-    pub(crate) fn line_spans<'b>(&'b self, line: &'b str, row: usize, lnum_len: u8) -> Line<'b> {
+    pub(crate) fn line_spans_segment<'b>(
+        &'b self,
+        line: &'b str,
+        wrapped: &WrappedLine,
+        lnum_len: u8,
+    ) -> Line<'b> {
+        let fragment = &line[wrapped.start_byte..wrapped.end_byte];
         let mut hl = LineHighlighter::new(
-            line,
+            fragment,
             self.cursor_style,
             self.tab_len,
             self.mask,
@@ -1629,20 +1655,64 @@ impl<'a> TextArea<'a> {
         );
 
         if let Some(style) = self.line_number_style {
-            hl.line_number(row, lnum_len, style);
+            if wrapped.first_in_row {
+                hl.line_number(wrapped.row, lnum_len, style);
+            } else {
+                hl.line_number_placeholder(lnum_len, style);
+            }
         }
 
-        if row == self.cursor.0 {
-            hl.cursor_line(self.cursor.1, self.cursor_line_style);
+        if wrapped.row == self.cursor.0 {
+            hl.set_line_style(self.cursor_line_style);
+            let cursor_col = self.cursor.1;
+            let in_segment = if wrapped.last_in_row {
+                wrapped.start_col <= cursor_col && cursor_col <= wrapped.end_col
+            } else {
+                wrapped.start_col <= cursor_col && cursor_col < wrapped.end_col
+            };
+            if in_segment {
+                hl.cursor_line(cursor_col - wrapped.start_col, self.cursor_line_style);
+            }
         }
 
         #[cfg(feature = "search")]
         if let Some(matches) = self.search.matches(line) {
-            hl.search(matches, self.search.style);
+            let clipped = matches
+                .filter_map(|(start, end)| {
+                    let start = cmp::max(start, wrapped.start_byte);
+                    let end = cmp::min(end, wrapped.end_byte);
+                    (start < end).then_some((start - wrapped.start_byte, end - wrapped.start_byte))
+                })
+                .collect::<Vec<_>>();
+            if !clipped.is_empty() {
+                hl.search(clipped.into_iter(), self.search.style);
+            }
         }
 
         if let Some((start, end)) = self.selection_positions() {
-            hl.selection(row, start.row, start.offset, end.row, end.offset);
+            if wrapped.first_in_row && wrapped.last_in_row {
+                hl.selection(wrapped.row, start.row, start.offset, end.row, end.offset);
+            } else if start.row <= wrapped.row && wrapped.row <= end.row {
+                let start_off = if start.row == wrapped.row {
+                    start.offset
+                } else {
+                    0
+                };
+                let end_off = if end.row == wrapped.row {
+                    end.offset
+                } else {
+                    line.len()
+                };
+                let clipped_start = cmp::max(start_off, wrapped.start_byte);
+                let clipped_end = cmp::min(end_off, wrapped.end_byte);
+                let select_at_end =
+                    wrapped.last_in_row && clipped_end == wrapped.end_byte && wrapped.row < end.row;
+                hl.selection_segment(
+                    clipped_start.saturating_sub(wrapped.start_byte),
+                    clipped_end.saturating_sub(wrapped.start_byte),
+                    select_at_end,
+                );
+            }
         }
 
         hl.into_spans()
@@ -1653,7 +1723,7 @@ impl<'a> TextArea<'a> {
     ///
     /// This method was deprecated at v0.5.3 and is no longer necessary. Instead you can directly pass `&TextArea`
     /// reference to the `Frame::render_widget` method call.
-    /// ```no_run
+    /// ```ignore
     /// # use ratatui::layout::Rect;
     /// # use ratatui::Terminal;
     /// # use ratatui::widgets::Widget as _;
@@ -1689,7 +1759,7 @@ impl<'a> TextArea<'a> {
 
     /// Set the style of textarea. By default, textarea is not styled.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1709,7 +1779,8 @@ impl<'a> TextArea<'a> {
     /// Set the block of textarea. By default, no block is set.
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::widgets::{Block, Borders};
+    /// use ratatui_widgets::block::Block;
+    /// use ratatui_widgets::borders::Borders;
     ///
     /// let mut textarea = TextArea::default();
     /// let block = Block::default().borders(Borders::ALL).title("Block Title");
@@ -1723,7 +1794,8 @@ impl<'a> TextArea<'a> {
     /// Remove the block of textarea which was set by [`TextArea::set_block`].
     /// ```
     /// use ratatui_textarea::TextArea;
-    /// use ratatui::widgets::{Block, Borders};
+    /// use ratatui_widgets::block::Block;
+    /// use ratatui_widgets::borders::Borders;
     ///
     /// let mut textarea = TextArea::default();
     /// let block = Block::default().borders(Borders::ALL).title("Block Title");
@@ -1757,6 +1829,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn set_tab_length(&mut self, len: u8) {
         self.tab_len = len;
+        self.refresh_screen_map();
     }
 
     /// Get how many spaces are used for representing tab character. The default value is 4.
@@ -1826,7 +1899,7 @@ impl<'a> TextArea<'a> {
     /// Set the style of line at cursor. By default, the cursor line is styled with underline. To stop styling the
     /// cursor line, set the default style.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1851,7 +1924,7 @@ impl<'a> TextArea<'a> {
     /// that line numbers are disabled by default. If you want to show line numbers but don't want to style them, set
     /// the default style.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1863,12 +1936,13 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn set_line_number_style(&mut self, style: Style) {
         self.line_number_style = Some(style);
+        self.refresh_screen_map();
     }
 
     /// Remove the style of line number which was set by [`TextArea::set_line_number_style`]. After calling this
     /// method, Line numbers will no longer be shown.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1879,6 +1953,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn remove_line_number(&mut self) {
         self.line_number_style = None;
+        self.refresh_screen_map();
     }
 
     /// Get the style of line number if set.
@@ -2056,7 +2131,7 @@ impl<'a> TextArea<'a> {
     /// Set the style of cursor. By default, a cursor is rendered in the reversed color. Setting the same style as
     /// cursor line hides a cursor.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2125,8 +2200,12 @@ impl<'a> TextArea<'a> {
     ///
     /// assert_eq!(textarea.cursor(), (1, 1));
     /// ```
-    pub fn cursor(&self) -> (usize, usize) {
+    pub fn cursor(&self) -> DataCursor {
         self.cursor
+    }
+
+    pub fn screen_cursor(&self) -> ScreenCursor {
+        self.array_to_screen(self.cursor)
     }
 
     /// Get the current selection range as a pair of the start position and the end position. The range is bounded
@@ -2166,9 +2245,9 @@ impl<'a> TextArea<'a> {
     pub fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
         self.selection_start.map(|pos| {
             if pos > self.cursor {
-                (self.cursor, pos)
+                ((self.cursor.0, self.cursor.1), (pos.0, pos.1))
             } else {
-                (pos, self.cursor)
+                ((pos.0, pos.1), (self.cursor.0, self.cursor.1))
             }
         })
     }
@@ -2176,7 +2255,7 @@ impl<'a> TextArea<'a> {
     /// Set text alignment. When [`Alignment::Center`] or [`Alignment::Right`] is set, line number is automatically
     /// disabled because those alignments don't work well with line numbers.
     /// ```
-    /// use ratatui::layout::Alignment;
+    /// use ratatui_core::layout::Alignment;
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2189,11 +2268,12 @@ impl<'a> TextArea<'a> {
             self.line_number_style = None;
         }
         self.alignment = alignment;
+        self.refresh_screen_map();
     }
 
     /// Get current text alignment. The default alignment is [`Alignment::Left`].
     /// ```
-    /// use ratatui::layout::Alignment;
+    /// use ratatui_core::layout::Alignment;
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2202,6 +2282,17 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn alignment(&self) -> Alignment {
         self.alignment
+    }
+
+    /// Set the soft-wrap mode used when rendering text.
+    pub fn set_wrap_mode(&mut self, mode: WrapMode) {
+        self.wrap_mode = mode;
+        self.refresh_screen_map();
+    }
+
+    /// Get the current soft-wrap mode.
+    pub fn wrap_mode(&self) -> WrapMode {
+        self.wrap_mode
     }
 
     /// Check if the textarea has a empty content.
@@ -2354,7 +2445,7 @@ impl<'a> TextArea<'a> {
     #[cfg_attr(docsrs, doc(cfg(feature = "search")))]
     pub fn search_forward(&mut self, match_cursor: bool) -> bool {
         if let Some(cursor) = self.search.forward(&self.lines, self.cursor, match_cursor) {
-            self.cursor = cursor;
+            self.cursor = cursor.into();
             true
         } else {
             false
@@ -2398,7 +2489,7 @@ impl<'a> TextArea<'a> {
     #[cfg_attr(docsrs, doc(cfg(feature = "search")))]
     pub fn search_back(&mut self, match_cursor: bool) -> bool {
         if let Some(cursor) = self.search.back(&self.lines, self.cursor, match_cursor) {
-            self.cursor = cursor;
+            self.cursor = cursor.into();
             true
         } else {
             false
@@ -2408,7 +2499,7 @@ impl<'a> TextArea<'a> {
     /// Get the text style at matches of text search. The default style is colored with blue in background.
     ///
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let textarea = TextArea::default();
@@ -2424,7 +2515,7 @@ impl<'a> TextArea<'a> {
     /// Set the text style at matches of text search. The default style is colored with blue in background.
     ///
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -2445,9 +2536,9 @@ impl<'a> TextArea<'a> {
     /// the cursor position will be adjusted to stay in the viewport using the same logic as [`CursorMove::InViewport`].
     ///
     /// ```
-    /// # use ratatui::buffer::Buffer;
-    /// # use ratatui::layout::Rect;
-    /// # use ratatui::widgets::Widget as _;
+    /// # use ratatui_core::buffer::Buffer;
+    /// # use ratatui_core::layout::Rect;
+    /// # use ratatui_core::widgets::Widget as _;
     /// use ratatui_textarea::TextArea;
     ///
     /// // Let's say terminal height is 8.

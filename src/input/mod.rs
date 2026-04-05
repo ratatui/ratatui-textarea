@@ -68,7 +68,7 @@ pub enum Key {
 ///
 /// When `crossterm`, `termion`, `termwiz` features are enabled, converting respective key input types into this
 /// `Input` type is defined.
-/// ```no_run
+/// ```ignore
 /// use ratatui_textarea::{TextArea, Input, Key};
 /// use crossterm::event::{Event, read};
 ///
