@@ -105,12 +105,6 @@ impl<'a> TextArea<'a> {
         Text::from(lines)
     }
 
-    fn placeholder_widget(&'a self) -> Text<'a> {
-        let cursor = Span::styled(" ", self.cursor_style);
-        let text = Span::raw(self.placeholder.as_str());
-        Text::from(Line::from(vec![cursor, text]))
-    }
-
     fn scroll_top_row(&self, prev_top: u16, height: u16) -> u16 {
         next_scroll_top(prev_top, self.screen_cursor().row as u16, height)
     }
@@ -145,8 +139,15 @@ impl Widget for &TextArea<'_> {
         }
 
         let (prev_top_row, prev_top_col) = self.viewport.scroll_top();
-        let (text, style, top_row, top_col) = if !self.placeholder.is_empty() && self.is_empty() {
-            (self.placeholder_widget(), self.placeholder_style, 0, 0)
+        let (text, top_row, top_col) = if self.is_empty() && !self.placeholder.lines.is_empty() {
+            let mut placeholder = self.placeholder.clone();
+            let cursor = Span::styled(" ", self.cursor_style);
+            if let Some(first_line) = placeholder.lines.first_mut() {
+                first_line.spans.insert(0, cursor);
+            } else {
+                placeholder.lines.push(Line::from(vec![cursor]));
+            }
+            (placeholder, 0u16, 0u16)
         } else {
             let top_row = self.scroll_top_row(prev_top_row, height);
             let top_col = if self.wrap_mode() == WrapMode::None {
@@ -155,8 +156,8 @@ impl Widget for &TextArea<'_> {
                 0
             };
             (
-                self.text_widget(top_row as _, height as _),
-                self.style(),
+                self.text_widget(top_row as _, height as _)
+                    .style(self.style()),
                 top_row,
                 top_col,
             )
@@ -165,19 +166,18 @@ impl Widget for &TextArea<'_> {
         // To get fine control over the text color and the surrrounding block they have to be rendered separately
         // see https://github.com/ratatui/ratatui/issues/144
         let mut text_area = area;
-        let mut inner = Paragraph::new(text)
-            .style(style)
-            .alignment(self.alignment());
+        let mut inner = Paragraph::new(text).alignment(self.alignment());
         if let Some(b) = self.block() {
             text_area = b.inner(area);
             b.render(area, buf)
         }
         if top_col != 0 {
-            inner = inner.scroll((0, top_col));
+            inner = inner.scroll((0, top_col as u16));
         }
 
         // Store scroll top position for rendering on the next tick
-        self.viewport.store(top_row, top_col, width, height);
+        self.viewport
+            .store(top_row as u16, top_col as u16, width, height);
 
         inner.render(text_area, buf);
     }

@@ -21,7 +21,7 @@ fn search_lines_forward() {
         let moved = textarea.search_forward(false);
         let cursor = textarea.cursor();
         assert!(moved, "{}th move didn't happen: {:?}", i + 1, cursor);
-        assert_eq!(pos, cursor, "{}th position is unexpected", i + 1);
+        assert_eq!(cursor, pos, "{}th position is unexpected", i + 1);
     }
 }
 
@@ -44,7 +44,7 @@ fn search_lines_backward() {
         let moved = textarea.search_back(false);
         let cursor = textarea.cursor();
         assert!(moved, "{}th move didn't happen: {:?}", i + 1, cursor);
-        assert_eq!(pos, cursor, "{}th position is unexpected", i + 1);
+        assert_eq!(cursor, pos, "{}th position is unexpected", i + 1);
     }
 }
 
@@ -62,7 +62,7 @@ fn search_forward_within_line() {
         let moved = textarea.search_forward(false);
         let cursor = textarea.cursor();
         assert!(moved, "{}th move didn't happen: {:?}", i + 1, cursor);
-        assert_eq!(pos, cursor, "{}th position is unexpected", i + 1);
+        assert_eq!(cursor, pos, "{}th position is unexpected", i + 1);
     }
 }
 
@@ -80,7 +80,7 @@ fn search_backward_within_line() {
         let moved = textarea.search_back(false);
         let cursor = textarea.cursor();
         assert!(moved, "{}th move didn't happen: {:?}", i + 1, cursor);
-        assert_eq!(pos, cursor, "{}th position is unexpected", i + 1);
+        assert_eq!(cursor, pos, "{}th position is unexpected", i + 1);
     }
 }
 

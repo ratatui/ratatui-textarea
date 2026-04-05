@@ -12,8 +12,8 @@ use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
 use crate::wrap::{WrapMode, WrappedLine};
 use ratatui_core::layout::Alignment;
 use ratatui_core::layout::Rect;
-use ratatui_core::style::{Color, Modifier, Style};
-use ratatui_core::text::Line;
+use ratatui_core::style::{Color, Modifier, Style, Stylize};
+use ratatui_core::text::{Line, Text};
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::block::Block;
 use std::cell::{Cell, RefCell};
@@ -123,8 +123,7 @@ pub struct TextArea<'a> {
     search: Search,
     alignment: Alignment,
     wrap_mode: WrapMode,
-    pub(crate) placeholder: String,
-    pub(crate) placeholder_style: Style,
+    pub(crate) placeholder: Text<'a>,
     mask: Option<char>,
     selection_start: Option<DataCursor>,
     select_style: Style,
@@ -236,8 +235,7 @@ impl<'a> TextArea<'a> {
             search: Search::default(),
             alignment: Alignment::Left,
             wrap_mode: WrapMode::None,
-            placeholder: String::new(),
-            placeholder_style: Style::default().fg(Color::DarkGray),
+            placeholder: Text::default().fg(Color::DarkGray),
             mask: None,
             selection_start: None,
             select_style: Style::default().bg(Color::LightBlue),
@@ -1608,7 +1606,9 @@ impl<'a> TextArea<'a> {
     pub fn undo(&mut self) -> bool {
         if let Some(cursor) = self.history.undo(&mut self.lines) {
             self.cancel_selection();
-            self.cursor = cursor;
+            let row = cursor.0.min(self.lines.len().saturating_sub(1));
+            let col = cursor.1.min(self.lines[row].chars().count());
+            self.cursor = (row, col).into();
             self.refresh_screen_map();
             true
         } else {
@@ -1632,7 +1632,9 @@ impl<'a> TextArea<'a> {
     pub fn redo(&mut self) -> bool {
         if let Some(cursor) = self.history.redo(&mut self.lines) {
             self.cancel_selection();
-            self.cursor = cursor;
+            let row = cursor.0.min(self.lines.len().saturating_sub(1));
+            let col = cursor.1.min(self.lines[row].chars().count());
+            self.cursor = (row, col).into();
             self.refresh_screen_map();
             true
         } else {
@@ -1975,12 +1977,17 @@ impl<'a> TextArea<'a> {
     /// assert!(textarea.placeholder_style().is_some());
     /// ```
     pub fn set_placeholder_text(&mut self, placeholder: impl Into<String>) {
-        self.placeholder = placeholder.into();
+        let placeholder: String = placeholder.into();
+        if placeholder.is_empty() {
+            self.placeholder.lines.clear();
+        } else {
+            self.placeholder.lines = vec![Line::raw(placeholder)];
+        }
     }
 
     /// Set the style of the placeholder text. The default style is a dark gray text.
     /// ```
-    /// use ratatui::style::{Style, Color};
+    /// use ratatui_core::style::{Style, Color};
     /// use ratatui_textarea::TextArea;
     ///
     /// let mut textarea = TextArea::default();
@@ -1993,7 +2000,51 @@ impl<'a> TextArea<'a> {
     /// assert_eq!(textarea.placeholder_style(), Some(style));
     /// ```
     pub fn set_placeholder_style(&mut self, style: Style) {
-        self.placeholder_style = style;
+        self.placeholder.style = style;
+    }
+
+    /// Get the placeholder. The placeholder is shown when the textarea is empty.
+    /// ```
+    /// use ratatui_textarea::TextArea;
+    ///
+    /// let mut textarea = TextArea::default();
+    /// textarea.set_styled_placeholder("Hello");
+    /// assert_eq!(textarea.placeholder().lines[0].spans[0].content, "Hello");
+    /// ```
+    pub fn placeholder(&self) -> &Text<'_> {
+        &self.placeholder
+    }
+
+    /// Set the placeholder as a styled [`ratatui_core::text::Text`] value. The placeholder is shown when the textarea
+    /// is empty. Accepts anything that converts into `Text`: a plain `&str`, a styled `Line`, or a full `Text`.
+    ///
+    /// To disable the placeholder, pass an empty `Text`: `textarea.set_styled_placeholder(Text::default())`.
+    /// Alternatively, [`set_placeholder_text`](Self::set_placeholder_text) called with `""` also clears it.
+    /// ```
+    /// use ratatui_core::style::{Color, Style, Stylize};
+    /// use ratatui_core::text::{Line, Span, Text};
+    /// use ratatui_textarea::TextArea;
+    ///
+    /// let mut textarea = TextArea::default();
+    ///
+    /// // Plain string
+    /// textarea.set_styled_placeholder("Enter your message");
+    /// assert!(!textarea.placeholder().lines.is_empty());
+    ///
+    /// // Styled span
+    /// textarea.set_styled_placeholder(Line::from(vec![
+    ///     Span::styled("Required: ", Style::default().fg(Color::Red)),
+    ///     Span::raw("enter your name"),
+    /// ]));
+    ///
+    /// // Multi-line Text
+    /// textarea.set_styled_placeholder(Text::from_iter([
+    ///     Line::raw("Line 1"),
+    ///     Line::raw("Line 2"),
+    /// ]));
+    /// ```
+    pub fn set_styled_placeholder(&mut self, placeholder: impl Into<Text<'a>>) {
+        self.placeholder = placeholder.into();
     }
 
     /// Get the placeholder text. An empty string means the placeholder is disabled. The default value is an empty string.
@@ -2004,7 +2055,14 @@ impl<'a> TextArea<'a> {
     /// assert_eq!(textarea.placeholder_text(), "");
     /// ```
     pub fn placeholder_text(&self) -> &'_ str {
-        self.placeholder.as_str()
+        let line = match self.placeholder.lines.first() {
+            Some(line) => line,
+            None => return "",
+        };
+        match line.spans.first() {
+            Some(span) => &span.content,
+            None => "",
+        }
     }
 
     /// Get the placeholder style. When the placeholder text is empty, it returns `None` since the placeholder is disabled.
@@ -2019,10 +2077,10 @@ impl<'a> TextArea<'a> {
     /// assert!(textarea.placeholder_style().is_some());
     /// ```
     pub fn placeholder_style(&self) -> Option<Style> {
-        if self.placeholder.is_empty() {
+        if self.placeholder.lines.is_empty() {
             None
         } else {
-            Some(self.placeholder_style)
+            Some(self.placeholder.style)
         }
     }
 

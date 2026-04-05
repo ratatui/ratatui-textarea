@@ -79,6 +79,10 @@ name = "popup_placeholder"
 required-features = ["crossterm"]
 
 [[example]]
+name = "placeholder_demo"
+required-features = ["crossterm"]
+
+[[example]]
 name = "termwiz"
 required-features = ["termwiz"]
 

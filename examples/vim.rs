@@ -18,6 +18,7 @@ use std::io::BufRead;
 enum Mode {
     Normal,
     Insert,
+    Replace(bool), // true = replace once (r), false = overtype (R)
     Visual,
     Operator(char),
 }
@@ -26,7 +27,7 @@ impl Mode {
     fn block<'a>(&self) -> Block<'a> {
         let help = match self {
             Self::Normal => "type q to quit, type i to enter insert mode",
-            Self::Insert => "type Esc to back to normal mode",
+            Self::Replace(_) | Self::Insert => "type Esc to back to normal mode",
             Self::Visual => "type y to yank, type d to delete, type Esc to back to normal mode",
             Self::Operator(_) => "move cursor to apply operator",
         };
@@ -38,6 +39,7 @@ impl Mode {
         let color = match self {
             Self::Normal => Color::Reset,
             Self::Insert => Color::LightBlue,
+            Self::Replace(_) => Color::LightRed,
             Self::Visual => Color::LightYellow,
             Self::Operator(_) => Color::LightGreen,
         };
@@ -50,6 +52,7 @@ impl fmt::Display for Mode {
         match self {
             Self::Normal => write!(f, "NORMAL"),
             Self::Insert => write!(f, "INSERT"),
+            Self::Replace(_) => write!(f, "REPLACE"),
             Self::Visual => write!(f, "VISUAL"),
             Self::Operator(c) => write!(f, "OPERATOR({})", c),
         }
@@ -85,6 +88,11 @@ impl Vim {
         }
     }
 
+    fn is_before_line_end(textarea: &TextArea<'_>) -> bool {
+        let (row, col) = textarea.cursor();
+        col < textarea.lines()[row].len().saturating_sub(1)
+    }
+
     fn transition(&self, input: Input, textarea: &mut TextArea<'_>) -> Transition {
         if input.key == Key::Null {
             return Transition::Nop;
@@ -94,19 +102,19 @@ impl Vim {
             Mode::Normal | Mode::Visual | Mode::Operator(_) => {
                 match input {
                     Input {
-                        key: Key::Char('h'),
+                        key: Key::Char('h') | Key::Left,
                         ..
                     } => textarea.move_cursor(CursorMove::Back),
                     Input {
-                        key: Key::Char('j'),
+                        key: Key::Char('j') | Key::Down,
                         ..
                     } => textarea.move_cursor(CursorMove::Down),
                     Input {
-                        key: Key::Char('k'),
+                        key: Key::Char('k') | Key::Up,
                         ..
                     } => textarea.move_cursor(CursorMove::Up),
                     Input {
-                        key: Key::Char('l'),
+                        key: Key::Char('l') | Key::Right,
                         ..
                     } => textarea.move_cursor(CursorMove::Forward),
                     Input {
@@ -177,7 +185,9 @@ impl Vim {
                     Input {
                         key: Key::Char('x'),
                         ..
-                    } => {
+                    } if Self::is_before_line_end(textarea)
+                        || textarea.lines()[textarea.cursor().0].is_empty() =>
+                    {
                         textarea.delete_next_char();
                         return Transition::Mode(Mode::Normal);
                     }
@@ -193,7 +203,9 @@ impl Vim {
                         ..
                     } => {
                         textarea.cancel_selection();
-                        textarea.move_cursor(CursorMove::Forward);
+                        if Self::is_before_line_end(textarea) {
+                            textarea.move_cursor(CursorMove::Forward);
+                        }
                         return Transition::Mode(Mode::Insert);
                     }
                     Input {
@@ -228,6 +240,73 @@ impl Vim {
                         textarea.cancel_selection();
                         textarea.move_cursor(CursorMove::Head);
                         return Transition::Mode(Mode::Insert);
+                    }
+                    Input {
+                        key: Key::Char('J'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Normal => {
+                        let row = textarea.cursor().0;
+                        if row + 1 < textarea.lines().len() {
+                            textarea.move_cursor(CursorMove::End);
+                            textarea.delete_next_char(); // delete newline
+                            textarea.insert_char(' ');
+                        }
+                        return Transition::Mode(Mode::Normal);
+                    }
+                    Input {
+                        key: Key::Char('J'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Visual => {
+                        // Join all lines in selection
+                        let (start, end) = {
+                            let sel = textarea.selection_range();
+                            match sel {
+                                Some((s, e)) => (s.0, e.0),
+                                None => return Transition::Mode(Mode::Normal),
+                            }
+                        };
+                        textarea.cancel_selection();
+                        textarea.move_cursor(CursorMove::Jump(start as u16, 0));
+                        for _ in start..end {
+                            textarea.move_cursor(CursorMove::End);
+                            textarea.delete_next_char();
+                            textarea.insert_char(' ');
+                        }
+                        return Transition::Mode(Mode::Normal);
+                    }
+                    Input {
+                        key: Key::Char('S'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Normal => {
+                        textarea.move_cursor(CursorMove::Head);
+                        textarea.delete_line_by_end();
+                        return Transition::Mode(Mode::Insert);
+                    }
+                    Input {
+                        key: Key::Char('S'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Visual => {
+                        textarea.move_cursor(CursorMove::Forward);
+                        textarea.cut();
+                        return Transition::Mode(Mode::Insert);
+                    }
+                    Input {
+                        key: Key::Char('r'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Normal => {
+                        return Transition::Mode(Mode::Replace(true));
+                    }
+                    Input {
+                        key: Key::Char('R'),
+                        ctrl: false,
+                        ..
+                    } if self.mode == Mode::Normal => {
+                        return Transition::Mode(Mode::Replace(false));
                     }
                     Input {
                         key: Key::Char('q'),
@@ -282,6 +361,11 @@ impl Vim {
                         return Transition::Mode(Mode::Visual);
                     }
                     Input { key: Key::Esc, .. }
+                    | Input {
+                        key: Key::Char('['),
+                        ctrl: true,
+                        ..
+                    }
                     | Input {
                         key: Key::Char('v'),
                         ctrl: false,
@@ -385,11 +469,48 @@ impl Vim {
                     key: Key::Char('c'),
                     ctrl: true,
                     ..
+                }
+                | Input {
+                    key: Key::Char('['),
+                    ctrl: true,
+                    ..
                 } => Transition::Mode(Mode::Normal),
                 input => {
                     textarea.input(input); // Use default key mappings in insert mode
                     Transition::Mode(Mode::Insert)
                 }
+            },
+            Mode::Replace(once) => match input {
+                Input { key: Key::Esc, .. }
+                | Input {
+                    key: Key::Char('['),
+                    ctrl: true,
+                    ..
+                } => Transition::Mode(Mode::Normal),
+                Input {
+                    key: Key::Char(c),
+                    ctrl: false,
+                    alt: false,
+                    ..
+                } => {
+                    // Replace the character under the cursor
+                    if Self::is_before_line_end(textarea)
+                        || textarea.lines()[textarea.cursor().0].len() == textarea.cursor().1
+                    {
+                        textarea.delete_next_char();
+                        textarea.insert_char(c);
+                    }
+                    if once {
+                        Transition::Mode(Mode::Normal)
+                    } else {
+                        Transition::Mode(Mode::Replace(false))
+                    }
+                }
+                _ => Transition::Mode(if once {
+                    Mode::Normal
+                } else {
+                    Mode::Replace(false)
+                }),
             },
         }
     }

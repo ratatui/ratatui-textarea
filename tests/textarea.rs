@@ -1689,3 +1689,27 @@ fn test_delete_next_word() {
     t.test((1, 0), (1, 0, &["word  ことば 🐶", ""], " x"));
     t.test((1, 2), (1, 2, t.0, ""));
 }
+
+#[test]
+fn test_undo_after_select_all_delete_does_not_panic() {
+    // Regression test for rhysd/tui-textarea#121:
+    // undo() after select_all() + delete_str() must not panic with an out-of-bounds cursor.
+    let mut textarea = TextArea::from(["hello", "world"]);
+    textarea.select_all();
+    textarea.delete_str(usize::MAX);
+    assert_eq!(textarea.lines(), [""]);
+    assert!(textarea.undo());
+    assert_eq!(textarea.lines(), ["hello", "world"]);
+}
+
+#[test]
+fn test_redo_cursor_clamped() {
+    // redo() must also clamp the cursor rather than panic.
+    let mut textarea = TextArea::from(["hello", "world"]);
+    textarea.select_all();
+    textarea.delete_str(usize::MAX);
+    textarea.undo();
+    textarea.redo();
+    assert_eq!(textarea.lines(), [""]);
+    assert_eq!(textarea.cursor(), (0, 0));
+}
