@@ -46,9 +46,19 @@ impl From<KeyEvent> for Input {
             // key release event can be reported. Ignore it. (#14)
             return Self::default();
         }
-
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+
+        if key.code == KeyCode::BackTab {
+            // `crossterm` does not support Shift+Tab, but reports it as BackTab.
+            return Self {
+                key: Key::Tab,
+                shift: true,
+                ctrl,
+                alt,
+            };
+        }
+
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let key = Key::from(key.code);
 

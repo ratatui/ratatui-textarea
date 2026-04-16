@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.1
+
+### 🐛 Bug Fixes
+- Properly handle crossterm's `BackTab` key when converting to `Input` by @bentheiii in [#25](https://github.com/ratatui/ratatui-textarea/pull/25)
+
 ## 0.9.0 - 2026-04-06
 
 We're excited to announce the new version of **ratatui-textarea**! 🎉
