@@ -113,7 +113,7 @@ impl<'a> TextArea<'a> {
         let mut cursor = self.screen_cursor().col as u16;
         // Adjust the cursor position due to the width of line number.
         if self.line_number_style().is_some() {
-            let lnum = num_digits(self.lines().len()) as u16 + 2; // `+ 2` for margins
+            let lnum = self.line_number_width();
             if cursor <= lnum {
                 cursor *= 2; // Smoothly slide the line number into the screen on scrolling left
             } else {

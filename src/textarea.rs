@@ -6,7 +6,7 @@ use crate::screen_map::{DataLine, ScreenLine};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
-use crate::util::{Pos, spaces};
+use crate::util::{Pos, num_digits, spaces};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
 use crate::wrap::{WrapMode, WrappedLine};
@@ -1961,6 +1961,28 @@ impl<'a> TextArea<'a> {
         self.line_number_style
     }
 
+    /// Get the width in columns of the line number gutter: the digits of the last line number plus one margin column
+    /// on each side. It is `0` when line numbers are not enabled. Text is drawn to the right of the gutter, so this
+    /// is the offset to subtract when converting a column within the rendered area into a text column for
+    /// [`TextArea::screen_to_data`].
+    /// ```
+    /// use ratatui_core::style::Style;
+    /// use ratatui_textarea::TextArea;
+    ///
+    /// let mut textarea: TextArea = (1..=10).map(|i| i.to_string()).collect();
+    /// assert_eq!(textarea.line_number_width(), 0);
+    ///
+    /// textarea.set_line_number_style(Style::default());
+    /// assert_eq!(textarea.line_number_width(), 4); // "10" plus a margin on each side
+    /// ```
+    pub fn line_number_width(&self) -> u16 {
+        if self.line_number_style.is_some() {
+            u16::from(num_digits(self.lines.len())) + 2 // `+ 2` for margins
+        } else {
+            0
+        }
+    }
+
     /// Set the placeholder text. The text is set in the textarea when no text is input. Setting a non-empty string `""`
     /// enables the placeholder. The default value is an empty string so the placeholder is disabled by default.
     /// To customize the text style, see [`TextArea::set_placeholder_style`].
@@ -2206,6 +2228,78 @@ impl<'a> TextArea<'a> {
 
     pub fn screen_cursor(&self) -> ScreenCursor {
         self.array_to_screen(self.cursor)
+    }
+
+    /// Get the scroll position as a 0-base `(row, col)` pair: the display
+    /// line and column drawn at the top-left of the rendered area.
+    ///
+    /// Display lines are counted after soft wrapping, so with
+    /// [`WrapMode::None`] a display line is a line of the text and
+    /// otherwise a long line spans several. This is the offset that turns
+    /// a position within the rendered area into the screen position
+    /// [`TextArea::screen_to_data`] expects.
+    ///
+    /// The value is recorded while rendering, so it is `(0, 0)` until the
+    /// widget has been drawn at least once.
+    /// ```
+    /// use ratatui_core::buffer::Buffer;
+    /// use ratatui_core::layout::Rect;
+    /// use ratatui_core::widgets::Widget as _;
+    /// use ratatui_textarea::{CursorMove, TextArea};
+    ///
+    /// let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
+    /// assert_eq!(textarea.scroll_offset(), (0, 0));
+    ///
+    /// // The viewport follows the cursor while drawing.
+    /// textarea.move_cursor(CursorMove::Bottom);
+    /// let area = Rect { x: 0, y: 0, width: 8, height: 4 };
+    /// (&textarea).render(area, &mut Buffer::empty(area));
+    ///
+    /// let (row, _) = textarea.scroll_offset();
+    /// assert_eq!(row, 16, "the last four lines are on screen");
+    /// ```
+    pub fn scroll_offset(&self) -> (u16, u16) {
+        self.viewport.scroll_top()
+    }
+
+    /// Convert a screen position into the position in the text drawn
+    /// there, accounting for soft wrapping and tab expansion.
+    ///
+    /// This is the mapping a mouse click needs. `row` and `col` are 0-base
+    /// display coordinates counted from the top-left of the *text*, not of
+    /// the rendered area — add [`TextArea::scroll_offset`] to coordinates
+    /// taken from the area the widget was drawn into, and subtract
+    /// [`TextArea::line_number_width`] from the column when line numbers
+    /// are enabled.
+    ///
+    /// Positions outside the text clamp rather than being rejected: a row
+    /// past the last display line resolves to that line, and a column past
+    /// the end of a line resolves to its end. A click below or to the
+    /// right of the text therefore lands where a reader would expect.
+    /// ```
+    /// use ratatui_textarea::{CursorMove, DataCursor, TextArea};
+    ///
+    /// let mut textarea = TextArea::from(["hello", "world"]);
+    /// assert_eq!(textarea.screen_to_data(1, 3), DataCursor(1, 3));
+    ///
+    /// // Below the text clamps to the last line.
+    /// assert_eq!(textarea.screen_to_data(99, 0), DataCursor(1, 0));
+    ///
+    /// // Move the cursor to a clicked position.
+    /// let clicked = textarea.screen_to_data(0, 2);
+    /// textarea.move_cursor(CursorMove::Jump(clicked.0 as u16, clicked.1 as u16));
+    /// assert_eq!(textarea.cursor(), (0, 2));
+    /// ```
+    pub fn screen_to_data(&self, row: usize, col: usize) -> DataCursor {
+        // Every internal caller passes a row that came out of the screen
+        // map, so the bound is checked here, at the public boundary.
+        let row = row.min(self.screen_lines_count().saturating_sub(1));
+        self.screen_to_array(ScreenCursor {
+            row,
+            col,
+            char: None,
+            dc: None,
+        })
     }
 
     /// Get the current selection range as a pair of the start position and the end position. The range is bounded
