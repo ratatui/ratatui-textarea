@@ -6,7 +6,7 @@ use crate::screen_map::{DataLine, ScreenLine};
 use crate::scroll::Scrolling;
 #[cfg(feature = "search")]
 use crate::search::Search;
-use crate::util::{Pos, spaces};
+use crate::util::{Pos, num_digits, spaces};
 use crate::widget::Viewport;
 use crate::word::{find_word_exclusive_end_forward, find_word_start_backward};
 use crate::wrap::{WrapMode, WrappedLine};
@@ -1961,6 +1961,28 @@ impl<'a> TextArea<'a> {
         self.line_number_style
     }
 
+    /// Get the width in columns of the line number gutter: the digits of the last line number plus one margin column
+    /// on each side. It is `0` when line numbers are not enabled. Text is drawn to the right of the gutter, so this
+    /// is the offset to subtract when converting a column within the rendered area into a text column for
+    /// [`TextArea::screen_to_data`].
+    /// ```
+    /// use ratatui_core::style::Style;
+    /// use ratatui_textarea::TextArea;
+    ///
+    /// let mut textarea: TextArea = (1..=10).map(|i| i.to_string()).collect();
+    /// assert_eq!(textarea.line_number_width(), 0);
+    ///
+    /// textarea.set_line_number_style(Style::default());
+    /// assert_eq!(textarea.line_number_width(), 4); // "10" plus a margin on each side
+    /// ```
+    pub fn line_number_width(&self) -> u16 {
+        if self.line_number_style.is_some() {
+            u16::from(num_digits(self.lines.len())) + 2 // `+ 2` for margins
+        } else {
+            0
+        }
+    }
+
     /// Set the placeholder text. The text is set in the textarea when no text is input. Setting a non-empty string `""`
     /// enables the placeholder. The default value is an empty string so the placeholder is disabled by default.
     /// To customize the text style, see [`TextArea::set_placeholder_style`].
@@ -2206,6 +2228,78 @@ impl<'a> TextArea<'a> {
 
     pub fn screen_cursor(&self) -> ScreenCursor {
         self.array_to_screen(self.cursor)
+    }
+
+    /// Get the scroll position as a 0-base `(row, col)` pair: the display
+    /// line and column drawn at the top-left of the rendered area.
+    ///
+    /// Display lines are counted after soft wrapping, so with
+    /// [`WrapMode::None`] a display line is a line of the text and
+    /// otherwise a long line spans several. This is the offset that turns
+    /// a position within the rendered area into the screen position
+    /// [`TextArea::screen_to_data`] expects.
+    ///
+    /// The value is recorded while rendering, so it is `(0, 0)` until the
+    /// widget has been drawn at least once.
+    /// ```
+    /// use ratatui_core::buffer::Buffer;
+    /// use ratatui_core::layout::Rect;
+    /// use ratatui_core::widgets::Widget as _;
+    /// use ratatui_textarea::{CursorMove, TextArea};
+    ///
+    /// let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
+    /// assert_eq!(textarea.scroll_offset(), (0, 0));
+    ///
+    /// // The viewport follows the cursor while drawing.
+    /// textarea.move_cursor(CursorMove::Bottom);
+    /// let area = Rect { x: 0, y: 0, width: 8, height: 4 };
+    /// (&textarea).render(area, &mut Buffer::empty(area));
+    ///
+    /// let (row, _) = textarea.scroll_offset();
+    /// assert_eq!(row, 16, "the last four lines are on screen");
+    /// ```
+    pub fn scroll_offset(&self) -> (u16, u16) {
+        self.viewport.scroll_top()
+    }
+
+    /// Convert a screen position into the position in the text drawn
+    /// there, accounting for soft wrapping and tab expansion.
+    ///
+    /// This is the mapping a mouse click needs. `row` and `col` are 0-base
+    /// display coordinates counted from the top-left of the *text*, not of
+    /// the rendered area — add [`TextArea::scroll_offset`] to coordinates
+    /// taken from the area the widget was drawn into, and subtract
+    /// [`TextArea::line_number_width`] from the column when line numbers
+    /// are enabled.
+    ///
+    /// Positions outside the text clamp rather than being rejected: a row
+    /// past the last display line resolves to that line, and a column past
+    /// the end of a line resolves to its end. A click below or to the
+    /// right of the text therefore lands where a reader would expect.
+    /// ```
+    /// use ratatui_textarea::{CursorMove, DataCursor, TextArea};
+    ///
+    /// let mut textarea = TextArea::from(["hello", "world"]);
+    /// assert_eq!(textarea.screen_to_data(1, 3), DataCursor(1, 3));
+    ///
+    /// // Below the text clamps to the last line.
+    /// assert_eq!(textarea.screen_to_data(99, 0), DataCursor(1, 0));
+    ///
+    /// // Move the cursor to a clicked position.
+    /// let clicked = textarea.screen_to_data(0, 2);
+    /// textarea.move_cursor(CursorMove::Jump(clicked.0 as u16, clicked.1 as u16));
+    /// assert_eq!(textarea.cursor(), (0, 2));
+    /// ```
+    pub fn screen_to_data(&self, row: usize, col: usize) -> DataCursor {
+        // Every internal caller passes a row that came out of the screen
+        // map, so the bound is checked here, at the public boundary.
+        let row = row.min(self.screen_lines_count().saturating_sub(1));
+        self.screen_to_array(ScreenCursor {
+            row,
+            col,
+            char: None,
+            dc: None,
+        })
     }
 
     /// Get the current selection range as a pair of the start position and the end position. The range is bounded
@@ -2608,5 +2702,109 @@ mod tests {
         assert_eq!(textarea.cursor(), (15, 0));
         textarea.scroll((-5, 0));
         assert_eq!(textarea.cursor(), (12, 0));
+    }
+
+    fn rendered(textarea: &TextArea<'_>, width: u16, height: u16) {
+        use ratatui_core::buffer::Buffer;
+        use ratatui_core::layout::Rect;
+
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        textarea.render(area, &mut Buffer::empty(area));
+    }
+
+    #[test]
+    fn scroll_offset_tracks_the_viewport() {
+        let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
+        rendered(&textarea, 8, 4);
+        assert_eq!(textarea.scroll_offset(), (0, 0));
+
+        textarea.scroll((10, 0));
+        rendered(&textarea, 8, 4);
+        let (row, _) = textarea.scroll_offset();
+        assert!(row > 0, "scrolling down must move the viewport, got {row}");
+    }
+
+    #[test]
+    fn screen_to_data_maps_positions_and_clamps_outside_the_text() {
+        let textarea = TextArea::from(["hello", "hi"]);
+        rendered(&textarea, 16, 4);
+
+        assert_eq!(textarea.screen_to_data(0, 0), DataCursor(0, 0));
+        assert_eq!(textarea.screen_to_data(1, 1), DataCursor(1, 1));
+        assert_eq!(
+            textarea.screen_to_data(99, 0),
+            DataCursor(1, 0),
+            "a row past the last display line clamps to it"
+        );
+        assert_eq!(
+            textarea.screen_to_data(1, 99),
+            DataCursor(1, 2),
+            "a column past the end of a line clamps to its end"
+        );
+    }
+
+    #[test]
+    fn screen_to_data_follows_a_soft_wrapped_line() {
+        let mut textarea = TextArea::from(["aaaabbbb"]);
+        textarea.set_wrap_mode(WrapMode::Glyph);
+        rendered(&textarea, 4, 4);
+
+        assert_eq!(textarea.screen_to_data(0, 2), DataCursor(0, 2));
+        assert_eq!(
+            textarea.screen_to_data(1, 2),
+            DataCursor(0, 6),
+            "the second display row continues the same line of text"
+        );
+    }
+
+    #[test]
+    fn line_number_width_covers_digits_and_margins() {
+        let mut textarea: TextArea = (1..=100).map(|i| i.to_string()).collect();
+        assert_eq!(
+            textarea.line_number_width(),
+            0,
+            "no gutter without line numbers"
+        );
+
+        textarea.set_line_number_style(Style::default());
+        assert_eq!(
+            textarea.line_number_width(),
+            5,
+            "three digits for line 100 plus a margin on each side"
+        );
+    }
+
+    #[test]
+    fn screen_to_data_composes_with_the_line_number_gutter() {
+        let mut textarea = TextArea::from(["hello", "world"]);
+        textarea.set_line_number_style(Style::default());
+        rendered(&textarea, 16, 4);
+
+        // A position within the rendered area, at row 1 and column 5:
+        // subtract the gutter and add the scroll offset to map it.
+        let (top_row, top_col) = textarea.scroll_offset();
+        let row = 1 + usize::from(top_row);
+        let col = 5 - usize::from(textarea.line_number_width()) + usize::from(top_col);
+        assert_eq!(textarea.screen_to_data(row, col), DataCursor(1, 2));
+    }
+
+    #[test]
+    fn screen_to_data_round_trips_the_cursor() {
+        let mut textarea = TextArea::from(["hello there", "second line"]);
+        textarea.set_wrap_mode(WrapMode::Word);
+        rendered(&textarea, 6, 6);
+        textarea.move_cursor(CursorMove::Jump(1, 4));
+
+        let screen = textarea.screen_cursor();
+        assert_eq!(
+            textarea.screen_to_data(screen.row, screen.col),
+            DataCursor(1, 4),
+            "where the cursor is drawn must map back to where it is"
+        );
     }
 }
