@@ -1,6 +1,14 @@
-use ratatui_textarea::{CursorMove, TextArea};
+use ratatui_core::buffer::Buffer;
+use ratatui_core::layout::Rect;
+use ratatui_core::style::Style;
+use ratatui_core::widgets::Widget as _;
+use ratatui_textarea::{CursorMove, DataCursor, TextArea, WrapMode};
 use std::cmp;
 use std::fmt::Debug;
+
+const CHINESE: &str = "每个人都有自己的生活方式";
+const JAPANESE: &str = "日本語のテキストです";
+const KOREAN: &str = "한국어 텍스트입니다";
 
 fn assert_undo_redo<T: Debug>(
     before_pos: (usize, usize),
@@ -1712,4 +1720,221 @@ fn test_redo_cursor_clamped() {
     textarea.redo();
     assert_eq!(textarea.lines(), [""]);
     assert_eq!(textarea.cursor(), (0, 0));
+}
+
+fn rendered(textarea: &TextArea<'_>, width: u16, height: u16) {
+    let area = Rect {
+        x: 0,
+        y: 0,
+        width,
+        height,
+    };
+    textarea.render(area, &mut Buffer::empty(area));
+}
+
+fn assert_round_trips_every_position(textarea: &mut TextArea<'_>, context: WrapMode) {
+    let lines: Vec<String> = textarea.lines().to_vec();
+    for (row, line) in lines.iter().enumerate() {
+        for col in 0..=line.chars().count() {
+            textarea.move_cursor(CursorMove::Jump(row as u16, col as u16));
+            let screen = textarea.screen_cursor();
+            assert_eq!(
+                textarea.screen_to_data(screen.row, screen.col),
+                DataCursor(row, col),
+                "{context:?}: char {col} of {line:?} is drawn at {:?} but maps back elsewhere",
+                (screen.row, screen.col)
+            );
+        }
+    }
+}
+
+#[test]
+fn test_scroll_offset_tracks_the_viewport() {
+    let mut textarea: TextArea = (0..20).map(|i| i.to_string()).collect();
+    rendered(&textarea, 8, 4);
+    assert_eq!(textarea.scroll_offset(), (0, 0));
+
+    textarea.scroll((10, 0));
+    rendered(&textarea, 8, 4);
+    let (row, _) = textarea.scroll_offset();
+    assert!(row > 0, "scrolling down must move the viewport, got {row}");
+}
+
+#[test]
+fn test_screen_to_data_maps_positions_and_clamps_outside_the_text() {
+    let textarea = TextArea::from(["hello", "hi"]);
+    rendered(&textarea, 16, 4);
+
+    assert_eq!(textarea.screen_to_data(0, 0), DataCursor(0, 0));
+    assert_eq!(textarea.screen_to_data(1, 1), DataCursor(1, 1));
+    assert_eq!(
+        textarea.screen_to_data(99, 0),
+        DataCursor(1, 0),
+        "a row past the last display line clamps to it"
+    );
+    assert_eq!(
+        textarea.screen_to_data(1, 99),
+        DataCursor(1, 2),
+        "a column past the end of a line clamps to its end"
+    );
+}
+
+#[test]
+fn test_screen_to_data_follows_a_soft_wrapped_line() {
+    let mut textarea = TextArea::from(["aaaabbbb"]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    rendered(&textarea, 4, 4);
+
+    assert_eq!(textarea.screen_to_data(0, 2), DataCursor(0, 2));
+    assert_eq!(
+        textarea.screen_to_data(1, 2),
+        DataCursor(0, 6),
+        "the second display row continues the same line of text"
+    );
+}
+
+#[test]
+fn test_line_number_width_covers_digits_and_margins() {
+    let mut textarea: TextArea = (1..=100).map(|i| i.to_string()).collect();
+    assert_eq!(
+        textarea.line_number_width(),
+        0,
+        "no gutter without line numbers"
+    );
+
+    textarea.set_line_number_style(Style::default());
+    assert_eq!(
+        textarea.line_number_width(),
+        5,
+        "three digits for line 100 plus a margin on each side"
+    );
+}
+
+#[test]
+fn test_screen_to_data_composes_with_the_line_number_gutter() {
+    let mut textarea = TextArea::from(["hello", "world"]);
+    textarea.set_line_number_style(Style::default());
+    rendered(&textarea, 16, 4);
+
+    // A position within the rendered area, at row 1 and column 5: subtract the
+    // gutter and add the scroll offset to map it.
+    let (top_row, top_col) = textarea.scroll_offset();
+    let row = 1 + usize::from(top_row);
+    let col = 5 - usize::from(textarea.line_number_width()) + usize::from(top_col);
+    assert_eq!(textarea.screen_to_data(row, col), DataCursor(1, 2));
+}
+
+#[test]
+fn test_screen_to_data_round_trips_the_cursor() {
+    let mut textarea = TextArea::from(["hello there", "second line"]);
+    textarea.set_wrap_mode(WrapMode::Word);
+    rendered(&textarea, 6, 6);
+    textarea.move_cursor(CursorMove::Jump(1, 4));
+
+    let screen = textarea.screen_cursor();
+    assert_eq!(
+        textarea.screen_to_data(screen.row, screen.col),
+        DataCursor(1, 4),
+        "where the cursor is drawn must map back to where it is"
+    );
+}
+
+#[test]
+fn test_screen_to_data_steps_two_display_columns_per_wide_char() {
+    let textarea = TextArea::from([CHINESE]);
+    rendered(&textarea, 40, 4);
+
+    let chars = CHINESE.chars().count();
+    for char_index in 0..chars {
+        assert_eq!(
+            textarea.screen_to_data(0, char_index * 2),
+            DataCursor(0, char_index),
+            "column {} is the left half of char {char_index}",
+            char_index * 2
+        );
+        assert_eq!(
+            textarea.screen_to_data(0, char_index * 2 + 1),
+            DataCursor(0, char_index),
+            "the right half of a glyph belongs to that glyph"
+        );
+    }
+
+    assert_eq!(
+        textarea.screen_to_data(0, chars * 2),
+        DataCursor(0, chars),
+        "the column after the last glyph is the end of the line"
+    );
+}
+
+#[test]
+fn test_screen_to_data_maps_text_mixing_wide_and_narrow_chars() {
+    let mut textarea = TextArea::from(["中文abc日本語", "\t한국어"]);
+    textarea.set_tab_length(4);
+    rendered(&textarea, 40, 4);
+
+    // 中 0..2, 文 2..4, a 4, b 5, c 6, 日 7..9, 本 9..11, 語 11..13
+    assert_eq!(textarea.screen_to_data(0, 4), DataCursor(0, 2), "a");
+    assert_eq!(textarea.screen_to_data(0, 6), DataCursor(0, 4), "c");
+    assert_eq!(textarea.screen_to_data(0, 8), DataCursor(0, 5), "日");
+    assert_eq!(textarea.screen_to_data(0, 11), DataCursor(0, 7), "語");
+
+    assert_eq!(
+        textarea.screen_to_data(1, 3),
+        DataCursor(1, 0),
+        "a column inside the expanded tab lands on the tab"
+    );
+    assert_eq!(textarea.screen_to_data(1, 4), DataCursor(1, 1), "한");
+    assert_eq!(textarea.screen_to_data(1, 6), DataCursor(1, 2), "국");
+}
+
+#[test]
+fn test_screen_to_data_follows_a_glyph_wrapped_cjk_line() {
+    let mut textarea = TextArea::from([JAPANESE]);
+    textarea.set_wrap_mode(WrapMode::Glyph);
+    rendered(&textarea, 7, 8);
+
+    // Three glyphs fill six of the seven columns; a fourth does not fit, so the
+    // line breaks with the last column left blank.
+    assert_eq!(textarea.screen_to_data(0, 4), DataCursor(0, 2));
+    assert_eq!(
+        textarea.screen_to_data(1, 0),
+        DataCursor(0, 3),
+        "the second display row continues the same line of text"
+    );
+    assert_eq!(textarea.screen_to_data(1, 4), DataCursor(0, 5));
+}
+
+#[test]
+fn test_screen_to_data_round_trips_multilingual_text_in_every_wrap_mode() {
+    for mode in [
+        WrapMode::None,
+        WrapMode::Glyph,
+        WrapMode::Word,
+        WrapMode::WordOrGlyph,
+    ] {
+        let mut textarea =
+            TextArea::from([CHINESE, JAPANESE, KOREAN, "混合 mixed 幅 width", "🐶🐶"]);
+        textarea.set_wrap_mode(mode);
+        textarea.set_line_number_style(Style::default());
+        rendered(&textarea, 16, 20);
+
+        assert_round_trips_every_position(&mut textarea, mode);
+    }
+}
+
+#[test]
+fn test_screen_to_data_composes_with_the_gutter_and_scroll_offset_for_wide_chars() {
+    let mut textarea: TextArea = (0..12).map(|_| CHINESE.to_string()).collect();
+    textarea.set_line_number_style(Style::default());
+    textarea.move_cursor(CursorMove::Bottom);
+    rendered(&textarea, 40, 4);
+
+    let (top_row, top_col) = textarea.scroll_offset();
+    assert_eq!(top_row, 8, "the last four lines are on screen");
+
+    // A click on the first visible row, two columns to the right of the gutter:
+    // the left half of the second glyph of that line.
+    let row = usize::from(top_row);
+    let col = 2 + usize::from(top_col);
+    assert_eq!(textarea.screen_to_data(row, col), DataCursor(8, 1));
 }
