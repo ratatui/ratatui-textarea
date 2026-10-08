@@ -2119,6 +2119,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn set_mask_char(&mut self, mask: char) {
         self.mask = Some(mask);
+        self.refresh_screen_map();
     }
 
     /// Clear the masking character previously set by [`TextArea::set_mask_char`].
@@ -2134,6 +2135,7 @@ impl<'a> TextArea<'a> {
     /// ```
     pub fn clear_mask_char(&mut self) {
         self.mask = None;
+        self.refresh_screen_map();
     }
 
     /// Get the character to mask text. When no character is set, `None` is returned.

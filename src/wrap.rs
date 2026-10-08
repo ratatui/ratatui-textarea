@@ -52,11 +52,12 @@ pub(crate) fn wrapped_rows(
     mode: WrapMode,
     width: usize,
     tab_len: u8,
+    mask: Option<char>,
 ) -> Vec<WrappedLine> {
     let mut rows = Vec::new();
 
     for (row, line) in lines.iter().enumerate() {
-        let ranges = line_ranges(line, mode, width, tab_len);
+        let ranges = line_ranges(line, mode, width, tab_len, mask);
         let mut start_col = 0usize;
         for (i, (start_byte, end_byte)) in ranges.iter().copied().enumerate() {
             let end_col = start_col + line[start_byte..end_byte].chars().count();
@@ -81,6 +82,7 @@ pub(crate) fn line_ranges(
     mode: WrapMode,
     width: usize,
     tab_len: u8,
+    mask: Option<char>,
 ) -> Vec<(usize, usize)> {
     if mode == WrapMode::None {
         return vec![(0, line.len())];
@@ -91,11 +93,11 @@ pub(crate) fn line_ranges(
         WrapMode::None => vec![(0, line.len())],
         WrapMode::Glyph => {
             let mut chunks = Vec::new();
-            split_range_by_grapheme_width(line, 0, line.len(), width, tab_len, &mut chunks);
+            split_range_by_grapheme_width(line, 0, line.len(), width, tab_len, mask, &mut chunks);
             chunks
         }
-        WrapMode::Word => wrap_word_chunks(line, width, tab_len, false),
-        WrapMode::WordOrGlyph => wrap_word_chunks(line, width, tab_len, true),
+        WrapMode::Word => wrap_word_chunks(line, width, tab_len, mask, false),
+        WrapMode::WordOrGlyph => wrap_word_chunks(line, width, tab_len, mask, true),
     };
 
     if out.is_empty() {
@@ -108,6 +110,7 @@ fn wrap_word_chunks(
     line: &str,
     width: usize,
     tab_len: u8,
+    mask: Option<char>,
     fallback_to_glyph: bool,
 ) -> Vec<(usize, usize)> {
     let chunks: Vec<_> = UnicodeSegmentation::split_word_bound_indices(line)
@@ -133,7 +136,7 @@ fn wrap_word_chunks(
             seg_start = chunk.start;
         }
 
-        let chunk_width = display_width_from(chunk_text(line, chunk), seg_width, tab_len);
+        let chunk_width = display_width_from(chunk_text(line, chunk), seg_width, tab_len, mask);
         if seg_width + chunk_width <= width {
             seg_end = chunk.end;
             seg_width += chunk_width;
@@ -149,7 +152,15 @@ fn wrap_word_chunks(
         }
 
         if fallback_to_glyph {
-            split_range_by_grapheme_width(line, chunk.start, chunk.end, width, tab_len, &mut out);
+            split_range_by_grapheme_width(
+                line,
+                chunk.start,
+                chunk.end,
+                width,
+                tab_len,
+                mask,
+                &mut out,
+            );
         } else {
             out.push((chunk.start, chunk.end));
         }
@@ -173,6 +184,7 @@ fn split_range_by_grapheme_width(
     end: usize,
     width: usize,
     tab_len: u8,
+    mask: Option<char>,
     out: &mut Vec<(usize, usize)>,
 ) {
     let mut segment_start = start;
@@ -185,7 +197,7 @@ fn split_range_by_grapheme_width(
         {
             let grapheme_start = segment_start + offset;
             let grapheme_end = grapheme_start + grapheme.len();
-            let next_width = display_width_to(grapheme, segment_width, tab_len);
+            let next_width = display_width_to(grapheme, segment_width, tab_len, mask);
             let grapheme_width = next_width.saturating_sub(segment_width);
 
             if segment_end != segment_start && segment_width + grapheme_width > width {
@@ -217,13 +229,17 @@ fn chunk_text(line: &str, chunk: Chunk) -> &str {
     &line[chunk.start..chunk.end]
 }
 
-fn display_width_from(text: &str, start_width: usize, tab_len: u8) -> usize {
-    display_width_to(text, start_width, tab_len).saturating_sub(start_width)
+fn display_width_from(text: &str, start_width: usize, tab_len: u8, mask: Option<char>) -> usize {
+    display_width_to(text, start_width, tab_len, mask).saturating_sub(start_width)
 }
 
-fn display_width_to(text: &str, mut width: usize, tab_len: u8) -> usize {
+fn display_width_to(text: &str, mut width: usize, tab_len: u8, mask: Option<char>) -> usize {
     for c in text.chars() {
-        if c == '\t' {
+        // A masked line is drawn as one mask character per char,
+        // so each char is as wide as the mask.
+        if let Some(mask) = mask {
+            width += mask.width().unwrap_or(0);
+        } else if c == '\t' {
             if tab_len > 0 {
                 let tab = tab_len as usize;
                 let pad = tab - (width % tab);
@@ -241,7 +257,14 @@ mod tests {
     use super::*;
 
     fn segments(line: &str, mode: WrapMode, width: usize) -> Vec<&str> {
-        line_ranges(line, mode, width, 4)
+        line_ranges(line, mode, width, 4, None)
+            .into_iter()
+            .map(|(s, e)| &line[s..e])
+            .collect()
+    }
+
+    fn masked_segments(line: &str, mode: WrapMode, width: usize, mask: char) -> Vec<&str> {
+        line_ranges(line, mode, width, 4, Some(mask))
             .into_iter()
             .map(|(s, e)| &line[s..e])
             .collect()
@@ -281,5 +304,13 @@ mod tests {
     fn glyph_wrap_preserves_full_mixed_width_row_capacity() {
         let have = segments("a中bcde", WrapMode::Glyph, 4);
         assert_eq!(have, vec!["a中b", "cde"]);
+    }
+
+    #[test]
+    fn mask_wraps_by_the_mask_width() {
+        let have = masked_segments("a中\tcde", WrapMode::Glyph, 4, '*');
+        assert_eq!(have, vec!["a中\tc", "de"]);
+        let have = masked_segments("abcd", WrapMode::WordOrGlyph, 4, '＊');
+        assert_eq!(have, vec!["ab", "cd"]);
     }
 }

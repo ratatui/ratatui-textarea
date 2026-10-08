@@ -22,8 +22,11 @@ fn is_pure_ascii(line: &str) -> bool {
     line.is_ascii() && !line.contains('\t')
 }
 
-fn char_display_width(c: char, col: usize, tab_len: u8) -> usize {
-    if c == '\t' {
+fn char_display_width(c: char, col: usize, tab_len: u8, mask: Option<char>) -> usize {
+    // A masked line is drawn as one mask character per char, so each char is as wide as the mask.
+    if let Some(mask) = mask {
+        mask.width().unwrap_or(0)
+    } else if c == '\t' {
         let tab = tab_len.max(1) as usize;
         let pad = tab - (col % tab);
         pad.max(1)
@@ -32,30 +35,40 @@ fn char_display_width(c: char, col: usize, tab_len: u8) -> usize {
     }
 }
 
-fn display_width(text: &str, tab_len: u8) -> usize {
+fn display_width(text: &str, tab_len: u8, mask: Option<char>) -> usize {
     let mut col = 0usize;
     for c in text.chars() {
-        col += char_display_width(c, col, tab_len);
+        col += char_display_width(c, col, tab_len, mask);
     }
     col
 }
 
-fn screen_col_for_char_offset(text: &str, char_offset: usize, tab_len: u8) -> usize {
+fn screen_col_for_char_offset(
+    text: &str,
+    char_offset: usize,
+    tab_len: u8,
+    mask: Option<char>,
+) -> usize {
     let mut col = 0usize;
     for c in text.chars().take(char_offset) {
-        col += char_display_width(c, col, tab_len);
+        col += char_display_width(c, col, tab_len, mask);
     }
     col
 }
 
-fn char_offset_for_screen_col(text: &str, screen_col: usize, tab_len: u8) -> usize {
+fn char_offset_for_screen_col(
+    text: &str,
+    screen_col: usize,
+    tab_len: u8,
+    mask: Option<char>,
+) -> usize {
     let mut col = 0usize;
     let mut chars = 0usize;
     for c in text.chars() {
         if col >= screen_col {
             break;
         }
-        let width = char_display_width(c, col, tab_len);
+        let width = char_display_width(c, col, tab_len, mask);
         if col + width > screen_col {
             break;
         }
@@ -98,7 +111,13 @@ impl TextArea<'_> {
         };
 
         let rows = match wrap_width {
-            Some(width) => wrapped_rows(&self.lines, self.wrap_mode(), width, self.tab_length()),
+            Some(width) => wrapped_rows(
+                &self.lines,
+                self.wrap_mode(),
+                width,
+                self.tab_length(),
+                self.mask_char(),
+            ),
             None => self.fallback_rows(),
         };
 
@@ -120,17 +139,18 @@ impl TextArea<'_> {
             let fragment = &self.lines[wrapped.row][wrapped.start_byte..wrapped.end_byte];
             let char_count = wrapped.end_col.saturating_sub(wrapped.start_col);
             let cursor_max_col = if wrapped.last_in_row {
-                display_width(fragment, self.tab_length())
+                display_width(fragment, self.tab_length(), self.mask_char())
             } else {
                 screen_col_for_char_offset(
                     fragment,
                     char_count.saturating_sub(1),
                     self.tab_length(),
+                    self.mask_char(),
                 )
             };
             screen_lines.push(ScreenLine {
                 wrapped,
-                screen_width: display_width(fragment, self.tab_length()),
+                screen_width: display_width(fragment, self.tab_length(), self.mask_char()),
                 cursor_max_col,
             });
         }
@@ -163,7 +183,8 @@ impl TextArea<'_> {
         let line = self.screen_line(screen.row);
         let fragment =
             &self.lines[line.wrapped.row][line.wrapped.start_byte..line.wrapped.end_byte];
-        let char_offset = char_offset_for_screen_col(fragment, screen.col, self.tab_length());
+        let char_offset =
+            char_offset_for_screen_col(fragment, screen.col, self.tab_length(), self.mask_char());
         DataCursor(line.wrapped.row, line.wrapped.start_col + char_offset)
     }
 
@@ -190,7 +211,8 @@ impl TextArea<'_> {
         let line = screen_lines[screen_idx];
         let fragment = &self.lines[array.0][line.wrapped.start_byte..line.wrapped.end_byte];
         let char_offset = array.1.saturating_sub(line.wrapped.start_col);
-        let col = screen_col_for_char_offset(fragment, char_offset, self.tab_length());
+        let col =
+            screen_col_for_char_offset(fragment, char_offset, self.tab_length(), self.mask_char());
 
         ScreenCursor {
             row: screen_idx,

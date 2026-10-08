@@ -1938,3 +1938,83 @@ fn test_screen_to_data_composes_with_the_gutter_and_scroll_offset_for_wide_chars
     let col = 2 + usize::from(top_col);
     assert_eq!(textarea.screen_to_data(row, col), DataCursor(8, 1));
 }
+
+fn rendered_rows(textarea: &TextArea<'_>, width: u16, height: u16) -> Vec<String> {
+    let area = Rect {
+        x: 0,
+        y: 0,
+        width,
+        height,
+    };
+    let mut buf = Buffer::empty(area);
+    textarea.render(area, &mut buf);
+    (0..height)
+        .map(|y| (0..width).map(|x| buf[(x, y)].symbol()).collect())
+        .collect()
+}
+
+#[test]
+fn test_mask_measures_screen_positions_by_the_mask_not_the_text() {
+    // Ten wide chars are twenty cells of text but ten cells of mask. Scrolling and
+    // the cursor must follow the ten cells that are actually drawn, otherwise the
+    // viewport slides past the mask and the field goes blank, and leaks that the
+    // secret is made of wide chars.
+    let mut textarea = TextArea::from([JAPANESE]);
+    textarea.set_mask_char('*');
+    textarea.move_cursor(CursorMove::End);
+
+    assert_eq!(textarea.screen_cursor().col, JAPANESE.chars().count());
+
+    let rows = rendered_rows(&textarea, 4, 1);
+    assert_eq!(rows, ["*** "], "the last three mask chars and the cursor");
+    assert_eq!(textarea.scroll_offset(), (0, 7));
+    assert_eq!(textarea.screen_to_data(0, 8), DataCursor(0, 8));
+}
+
+#[test]
+fn test_mask_wraps_by_the_mask_width() {
+    let mut textarea = TextArea::from(["犬猫犬猫"]);
+    textarea.set_mask_char('*');
+    textarea.set_wrap_mode(WrapMode::Glyph);
+
+    let rows = rendered_rows(&textarea, 4, 2);
+    assert_eq!(rows, ["****", "    "]);
+}
+
+#[test]
+fn test_mask_takes_its_own_width() {
+    let mut textarea = TextArea::from(["abc"]);
+    textarea.set_mask_char('＊');
+    textarea.move_cursor(CursorMove::End);
+
+    assert_eq!(textarea.screen_cursor().col, 6);
+    let rows = rendered_rows(&textarea, 3, 1);
+    // A full-width mask char, the cell it spills into, then the cursor.
+    assert_eq!(rows, ["＊  "]);
+    assert_eq!(textarea.scroll_offset(), (0, 4));
+}
+
+#[test]
+fn test_mask_round_trips_every_position_and_clears() {
+    for mode in [
+        WrapMode::None,
+        WrapMode::Glyph,
+        WrapMode::Word,
+        WrapMode::WordOrGlyph,
+    ] {
+        let mut textarea = TextArea::from([JAPANESE, "a\tb", "混合 mixed"]);
+        textarea.set_wrap_mode(mode);
+        textarea.set_mask_char('＊');
+        rendered(&textarea, 16, 20);
+
+        assert_round_trips_every_position(&mut textarea, mode);
+    }
+
+    // Clearing the mask measures the text by its own widths again.
+    let mut textarea = TextArea::from([JAPANESE]);
+    textarea.set_mask_char('*');
+    textarea.move_cursor(CursorMove::End);
+    assert_eq!(textarea.screen_cursor().col, JAPANESE.chars().count());
+    textarea.clear_mask_char();
+    assert_eq!(textarea.screen_cursor().col, 2 * JAPANESE.chars().count());
+}
