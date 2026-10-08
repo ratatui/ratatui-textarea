@@ -4,13 +4,15 @@ use crate::wrap::WrapMode;
 #[cfg(feature = "portable-atomic")]
 use portable_atomic::{AtomicU64, Ordering};
 use ratatui_core::buffer::Buffer;
-use ratatui_core::layout::Rect;
+use ratatui_core::layout::{Alignment, Rect};
 use ratatui_core::text::{Line, Span, Text};
 use ratatui_core::widgets::Widget;
 use ratatui_widgets::paragraph::Paragraph;
 use std::cmp;
 #[cfg(not(feature = "portable-atomic"))]
 use std::sync::atomic::{AtomicU64, Ordering};
+use unicode_segmentation::UnicodeSegmentation as _;
+use unicode_width::{UnicodeWidthChar as _, UnicodeWidthStr as _};
 
 // &mut 'a (u16, u16, u16, u16) is not available since `render` method takes immutable reference of TextArea
 // instance. In the case, the TextArea instance cannot be accessed from any other objects since it is mutablly
@@ -92,15 +94,57 @@ fn next_scroll_top(prev_top: u16, cursor: u16, len: u16) -> u16 {
     }
 }
 
+// Cut the columns `left..left + width` out of a line. A wide char cut by either edge
+// becomes blank cells in its own style, so the other cells keep their columns and a
+// cursor on that char is still drawn.
+fn clip_line(line: Line<'_>, left: usize, width: usize) -> Line<'_> {
+    if left == 0 && line.width() <= width {
+        return line;
+    }
+
+    let right = left + width;
+    let mut col = 0;
+    let mut spans = Vec::with_capacity(line.spans.len());
+    for span in line.spans {
+        let mut text = String::new();
+        // Ratatui draws no control chars, so they take no columns here either.
+        for grapheme in span
+            .content
+            .graphemes(true)
+            .filter(|g| !g.contains(char::is_control))
+        {
+            let start = col;
+            col += grapheme.width();
+            if left <= start && col <= right {
+                text.push_str(grapheme);
+            } else if start < right && left < col {
+                let cells = cmp::min(col, right) - cmp::max(start, left);
+                text.extend(std::iter::repeat_n(' ', cells));
+            }
+        }
+        if !text.is_empty() {
+            spans.push(Span::styled(text, span.style));
+        }
+    }
+    Line { spans, ..line }
+}
+
 impl<'a> TextArea<'a> {
-    fn text_widget(&'a self, top_row: usize, height: usize) -> Text<'a> {
+    fn text_widget(&'a self, top_row: usize, height: usize, top_col: u16, width: u16) -> Text<'a> {
         let lnum_len = num_digits(self.lines().len());
         let screen_lines = self.screen_lines.borrow();
         let bottom_row = cmp::min(top_row + height, screen_lines.len());
         let mut lines = Vec::with_capacity(bottom_row - top_row);
         for row in &screen_lines[top_row..bottom_row] {
             let line = &self.lines()[row.wrapped.row];
-            lines.push(self.line_spans_segment(line, &row.wrapped, lnum_len));
+            let mut spans = self.line_spans_segment(line, &row.wrapped, lnum_len);
+            // Scroll here, not with `Paragraph::scroll`, which draws a wide char cut by the left
+            // edge whole and drops one cut by the right edge. Like that scroll, only left-aligned
+            // text is scrolled.
+            if self.alignment() == Alignment::Left {
+                spans = clip_line(spans, top_col.into(), width.into());
+            }
+            lines.push(spans);
         }
         Text::from(lines)
     }
@@ -110,7 +154,8 @@ impl<'a> TextArea<'a> {
     }
 
     fn scroll_top_col(&self, prev_top: u16, width: u16) -> u16 {
-        let mut cursor = self.screen_cursor().col as u16;
+        let screen = self.screen_cursor();
+        let mut cursor = screen.col as u16;
         // Adjust the cursor position due to the width of line number.
         if self.line_number_style().is_some() {
             let lnum = self.line_number_width();
@@ -120,7 +165,13 @@ impl<'a> TextArea<'a> {
                 cursor += lnum; // The cursor position is shifted by the line number part
             };
         }
-        next_scroll_top(prev_top, cursor, width)
+        // Scrolling right brings the whole char under the cursor into view, not just its
+        // first column. A char wider than the viewport keeps its first column in view.
+        // A masked line draws the mask char, so that is the char whose width counts.
+        let glyph = screen.char.map(|c| self.mask_char().unwrap_or(c));
+        let glyph_width = glyph.and_then(|c| c.width()).unwrap_or(1).max(1) as u16;
+        let right = cursor + glyph_width - 1;
+        next_scroll_top(next_scroll_top(prev_top, right, width), cursor, width)
     }
 }
 
@@ -156,7 +207,7 @@ impl Widget for &TextArea<'_> {
                 0
             };
             (
-                self.text_widget(top_row as _, height as _)
+                self.text_widget(top_row as _, height as _, top_col, width)
                     .style(self.style()),
                 top_row,
                 top_col,
@@ -166,13 +217,10 @@ impl Widget for &TextArea<'_> {
         // To get fine control over the text color and the surrrounding block they have to be rendered separately
         // see https://github.com/ratatui/ratatui/issues/144
         let mut text_area = area;
-        let mut inner = Paragraph::new(text).alignment(self.alignment());
+        let inner = Paragraph::new(text).alignment(self.alignment());
         if let Some(b) = self.block() {
             text_area = b.inner(area);
             b.render(area, buf)
-        }
-        if top_col != 0 {
-            inner = inner.scroll((0, top_col));
         }
 
         // Store scroll top position for rendering on the next tick
