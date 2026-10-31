@@ -6,12 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
-- Fix "attempt to subtract with overflow" panic on search  by @enmkdev in [#33](https://github.com/ratatui/ratatui-textarea/pull/33)
+- Fix masked text width calculations by @kristoferlund in [#36](https://github.com/ratatui/ratatui-textarea/pull/36)
+- Align text layout with rendered cell widths by @kristoferlund in [#37](https://github.com/ratatui/ratatui-textarea/pull/37)
+- Fix "attempt to subtract with overflow" panic on search by @enmkdev in [#33](https://github.com/ratatui/ratatui-textarea/pull/33)
 
 ### 📚 Documentation
 
-- Clarify cursor style behavior  by @karolinepauls in [#32](https://github.com/ratatui/ratatui-textarea/pull/32)
-
+- Clarify cursor style behavior by @karolinepauls in [#32](https://github.com/ratatui/ratatui-textarea/pull/32)
 
 **Full Changelog**: https://github.com/ratatui/ratatui-textarea/compare/0.9.3...0.9.4
 
