@@ -1,9 +1,8 @@
-use crate::util::{num_digits, spaces};
+use crate::util::{char_width, num_digits, spaces};
 use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span};
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use unicode_width::UnicodeWidthChar as _;
 
 enum Boundary {
     Cursor(Style),
@@ -77,7 +76,7 @@ impl DisplayTextBuilder {
                 if !buf.is_empty() {
                     buf.push(c);
                 }
-                self.width += c.width().unwrap_or(0);
+                self.width += char_width(c);
             }
         }
 
