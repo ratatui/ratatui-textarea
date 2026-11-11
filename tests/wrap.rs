@@ -475,7 +475,7 @@ fn vertical_scroll_after_deleting_lines() {
         textarea.delete_char();
     }
 
-    // The viewport should now show the first 4 lines and 2 empty lines
+    // The viewport should now show the first 4 remaining lines
     assert_eq!(
         render_lines(&textarea, 3, 4),
         ["1  ", "2  ", "3  ", "4  "]
