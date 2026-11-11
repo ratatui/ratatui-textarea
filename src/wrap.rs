@@ -131,7 +131,7 @@ fn wrap_word_chunks(
     let mut seg_width = 0usize;
     // Index of the chunk that follows the last whitespace inside the current segment, that is,
     // where the segment's last word begins.
-    let mut last_word = None;
+    let mut last_word_start = None;
 
     while i < chunks.len() {
         let chunk = chunks[i];
@@ -146,7 +146,7 @@ fn wrap_word_chunks(
             seg_width += chunk_width;
             i += 1;
             if is_whitespace(text) {
-                last_word = Some(i);
+                last_word_start = Some(i);
             }
             continue;
         }
@@ -154,23 +154,24 @@ fn wrap_word_chunks(
         if seg_end > seg_start {
             // Whitespace that does not fit would start the next row. Move the segment's last word
             // down with it instead, so that no row starts with the space between two words.
-            let word = last_word.filter(|&w| w < i && chunks[w].start > seg_start);
-            if let (true, Some(word)) = (is_whitespace(text), word) {
-                let cut = chunks[word].start;
+            let word_start = last_word_start
+                .filter(|&w| is_whitespace(text) && w < i && chunks[w].start > seg_start);
+            if let Some(word_start) = word_start {
+                let cut = chunks[word_start].start;
                 out.push((seg_start, cut));
                 seg_start = cut;
                 seg_end = cut;
-                i = word;
+                i = word_start;
             } else {
                 out.push((seg_start, seg_end));
                 seg_start = seg_end;
             }
             seg_width = 0;
-            last_word = None;
+            last_word_start = None;
             continue;
         }
 
-        last_word = None;
+        last_word_start = None;
         i += 1;
         if fallback_to_glyph {
             split_range_by_grapheme_width(
