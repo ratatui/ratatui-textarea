@@ -133,6 +133,17 @@ fn wrap_word_chunks(
     while i < chunks.len() {
         let chunk = chunks[i];
         if seg_end == seg_start {
+            if let Some((prev_start, prev_end)) = out.last_mut() {
+                if chunk_text(line, chunk).chars().all(char::is_whitespace)
+                    && !line[*prev_start..*prev_end]
+                        .chars()
+                        .all(char::is_whitespace)
+                {
+                    *prev_end = chunk.end;
+                    i += 1;
+                    continue;
+                }
+            }
             seg_start = chunk.start;
         }
 
@@ -280,6 +291,12 @@ mod tests {
     fn word_or_glyph_wrap_splits_long_word() {
         let have = segments("helloworld", WrapMode::WordOrGlyph, 4);
         assert_eq!(have, vec!["hell", "owor", "ld"]);
+    }
+
+    #[test]
+    fn word_wrap_keeps_leading_indent() {
+        let have = segments("\t\tfoo", WrapMode::Word, 4);
+        assert_eq!(have, vec!["\t", "\t", "foo"]);
     }
 
     #[test]
