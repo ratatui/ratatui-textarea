@@ -316,11 +316,15 @@ mod tests {
     }
 
     #[test]
-    fn word_wrap_never_starts_a_row_with_the_space_between_words() {
-        let have = segments("aa bb cc", WrapMode::WordOrGlyph, 5);
-        assert_eq!(have, vec!["aa ", "bb cc"]);
+    fn word_wrap_moves_a_word_down_with_the_space_after_it() {
         let have = segments("one two three", WrapMode::Word, 7);
         assert_eq!(have, vec!["one ", "two ", "three"]);
+    }
+
+    #[test]
+    fn word_or_glyph_wrap_moves_a_word_down_with_the_space_after_it() {
+        let have = segments("aa bb cc", WrapMode::WordOrGlyph, 5);
+        assert_eq!(have, vec!["aa ", "bb cc"]);
     }
 
     #[test]
