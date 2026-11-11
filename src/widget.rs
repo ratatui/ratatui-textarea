@@ -161,7 +161,15 @@ impl<'a> TextArea<'a> {
     }
 
     fn scroll_top_row(&self, prev_top: u16, height: u16) -> u16 {
-        next_scroll_top(prev_top, self.screen_cursor().row as u16, height)
+        // Calculate maximum (lowest) possible starting position that avoids unneeded blank lines
+        let max_top = self
+            .screen_lines
+            .borrow()
+            .len()
+            .saturating_sub(height as usize) as u16;
+
+        // If the cursor has unneeded blank lines below it, set it to the position that avoids them.
+        next_scroll_top(prev_top, self.screen_cursor().row as u16, height).min(max_top)
     }
 
     fn scroll_top_col(&self, prev_top: u16, width: u16) -> u16 {
