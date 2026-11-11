@@ -2110,3 +2110,13 @@ fn test_halfwidth_sound_marks_take_a_cell() {
     textarea.set_mask_char('ﾞ');
     assert_eq!(textarea.screen_cursor().col, 4);
 }
+
+#[test]
+fn test_wrapped_cursor_on_hanging_space_is_drawn_on_the_last_column() {
+    let mut textarea = TextArea::from(["foo bar baz"]);
+    textarea.set_wrap_mode(WrapMode::Word);
+    textarea.move_cursor(CursorMove::Jump(0, 7));
+
+    let buf = render_buffer(&textarea, 7, 2);
+    assert_eq!(cursor_cells(&buf), [(6, 0)]);
+}

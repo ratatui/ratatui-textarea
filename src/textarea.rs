@@ -1666,7 +1666,8 @@ impl<'a> TextArea<'a> {
                 wrapped.start_col <= cursor_col && cursor_col < wrapped.end_col
             };
             if in_segment {
-                hl.cursor_line(cursor_col - wrapped.start_col, self.cursor_line_style);
+                let offset = self.drawn_cursor_offset(fragment, cursor_col - wrapped.start_col);
+                hl.cursor_line(offset, self.cursor_line_style);
             }
         }
 

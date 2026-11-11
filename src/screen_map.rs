@@ -95,19 +95,7 @@ impl TextArea<'_> {
     }
 
     pub(crate) fn screen_map_load(&self) {
-        let wrap_width = if self.wrap_mode() != WrapMode::None {
-            let width = self.area.get().width;
-            if width > 0 {
-                let line_number_len = self
-                    .line_number_style()
-                    .map(|_| num_digits(self.lines.len()));
-                Some(effective_wrap_width(width, line_number_len))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let wrap_width = self.wrap_width();
 
         let rows = match wrap_width {
             Some(width) => wrapped_rows(
@@ -156,6 +144,43 @@ impl TextArea<'_> {
 
         *self.screen_lines.borrow_mut() = screen_lines;
         *self.data_pointers.borrow_mut() = data_pointers;
+    }
+
+    fn wrap_width(&self) -> Option<usize> {
+        if self.wrap_mode() != WrapMode::None {
+            let width = self.area.get().width;
+            if width > 0 {
+                let line_number_len = self
+                    .line_number_style()
+                    .map(|_| num_digits(self.lines.len()));
+                Some(effective_wrap_width(width, line_number_len))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn drawn_cursor_offset(&self, fragment: &str, char_offset: usize) -> usize {
+        if let Some(width) = self.wrap_width() {
+            let col = screen_col_for_char_offset(
+                fragment,
+                char_offset,
+                self.tab_length(),
+                self.mask_char(),
+            );
+            if col >= width {
+                return char_offset_for_screen_col(
+                    fragment,
+                    width,
+                    self.tab_length(),
+                    self.mask_char(),
+                )
+                .saturating_sub(1);
+            }
+        }
+        char_offset
     }
 
     pub(crate) fn screen_lines_count(&self) -> usize {
