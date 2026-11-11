@@ -129,6 +129,9 @@ fn wrap_word_chunks(
     let mut seg_start = chunks[0].start;
     let mut seg_end = seg_start;
     let mut seg_width = 0usize;
+    // Index of the chunk that follows the last whitespace inside the current segment, that is,
+    // where the segment's last word begins.
+    let mut last_word = None;
 
     while i < chunks.len() {
         let chunk = chunks[i];
@@ -136,21 +139,39 @@ fn wrap_word_chunks(
             seg_start = chunk.start;
         }
 
-        let chunk_width = display_width_from(chunk_text(line, chunk), seg_width, tab_len, mask);
+        let text = chunk_text(line, chunk);
+        let chunk_width = display_width_from(text, seg_width, tab_len, mask);
         if seg_width + chunk_width <= width {
             seg_end = chunk.end;
             seg_width += chunk_width;
             i += 1;
+            if is_whitespace(text) {
+                last_word = Some(i);
+            }
             continue;
         }
 
         if seg_end > seg_start {
-            out.push((seg_start, seg_end));
-            seg_start = seg_end;
+            // Whitespace that does not fit would start the next row. Move the segment's last word
+            // down with it instead, so that no row starts with the space between two words.
+            let word = last_word.filter(|&w| w < i && chunks[w].start > seg_start);
+            if let (true, Some(word)) = (is_whitespace(text), word) {
+                let cut = chunks[word].start;
+                out.push((seg_start, cut));
+                seg_start = cut;
+                seg_end = cut;
+                i = word;
+            } else {
+                out.push((seg_start, seg_end));
+                seg_start = seg_end;
+            }
             seg_width = 0;
+            last_word = None;
             continue;
         }
 
+        last_word = None;
+        i += 1;
         if fallback_to_glyph {
             split_range_by_grapheme_width(
                 line,
@@ -161,11 +182,18 @@ fn wrap_word_chunks(
                 mask,
                 &mut out,
             );
+            // Keep the tail of the split word open, so that what follows it on the line can share
+            // its row instead of starting a new one.
+            if let Some((start, end)) = out.pop() {
+                seg_start = start;
+                seg_end = end;
+                seg_width = display_width_from(&line[start..end], 0, tab_len, mask);
+                continue;
+            }
         } else {
             out.push((chunk.start, chunk.end));
         }
 
-        i += 1;
         seg_start = chunk.end;
         seg_end = chunk.end;
         seg_width = 0;
@@ -224,6 +252,10 @@ fn split_range_by_grapheme_width(
     }
 }
 
+fn is_whitespace(text: &str) -> bool {
+    text.chars().all(char::is_whitespace)
+}
+
 #[inline]
 fn chunk_text(line: &str, chunk: Chunk) -> &str {
     &line[chunk.start..chunk.end]
@@ -280,6 +312,20 @@ mod tests {
     fn word_or_glyph_wrap_splits_long_word() {
         let have = segments("helloworld", WrapMode::WordOrGlyph, 4);
         assert_eq!(have, vec!["hell", "owor", "ld"]);
+    }
+
+    #[test]
+    fn word_wrap_never_starts_a_row_with_the_space_between_words() {
+        let have = segments("aa bb cc", WrapMode::WordOrGlyph, 5);
+        assert_eq!(have, vec!["aa ", "bb cc"]);
+        let have = segments("one two three", WrapMode::Word, 7);
+        assert_eq!(have, vec!["one ", "two ", "three"]);
+    }
+
+    #[test]
+    fn word_or_glyph_wrap_continues_the_row_after_a_split_word() {
+        let have = segments("helloworld x", WrapMode::WordOrGlyph, 4);
+        assert_eq!(have, vec!["hell", "owor", "ld x"]);
     }
 
     #[test]

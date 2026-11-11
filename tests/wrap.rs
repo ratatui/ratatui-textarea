@@ -117,6 +117,24 @@ fn word_mode_long_paragraph_wraps_by_words() {
 }
 
 #[test]
+fn word_mode_moves_a_word_down_with_the_space_after_it() {
+    let mut textarea = TextArea::from(["one two three"]);
+    textarea.set_wrap_mode(WrapMode::Word);
+    textarea.move_cursor(CursorMove::End);
+    let lines = render_lines(&textarea, 7, 3);
+    assert_eq!(
+        lines,
+        vec![
+            "one    ".to_string(),
+            "two    ".to_string(),
+            "three  ".to_string(),
+        ]
+    );
+    let cursor = textarea.screen_cursor();
+    assert_eq!((cursor.row, cursor.col), (2, 5));
+}
+
+#[test]
 fn glyph_mode_splits_long_token() {
     let mut textarea = TextArea::from(["0123456789abcdefghijklmnopqrstuvwxyz"]);
     textarea.set_wrap_mode(WrapMode::Glyph);
@@ -159,8 +177,8 @@ fn word_and_word_or_glyph_differ_for_long_words() {
             "supercalif".to_string(),
             "ragilistic".to_string(),
             "expialidoc".to_string(),
-            "ious      ".to_string(),
-            " omega    ".to_string(),
+            "ious omega".to_string(),
+            "          ".to_string(),
         ]
     );
 }
