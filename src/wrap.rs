@@ -113,7 +113,7 @@ fn wrap_word_chunks(
     mask: Option<char>,
     fallback_to_glyph: bool,
 ) -> Vec<(usize, usize)> {
-    let chunks: Vec<_> = UnicodeSegmentation::split_word_bound_indices(line)
+    let mut chunks: Vec<_> = UnicodeSegmentation::split_word_bound_indices(line)
         .map(|(start, text)| Chunk {
             start,
             end: start + text.len(),
@@ -133,14 +133,17 @@ fn wrap_word_chunks(
     while i < chunks.len() {
         let chunk = chunks[i];
         if seg_end == seg_start {
-            if let Some((prev_start, prev_end)) = out.last_mut() {
-                if chunk_text(line, chunk).chars().all(char::is_whitespace)
-                    && !line[*prev_start..*prev_end]
-                        .chars()
-                        .all(char::is_whitespace)
+            if let Some((_, prev_end)) = out.last_mut() {
+                let text = chunk_text(line, chunk);
+                if text.chars().all(char::is_whitespace)
+                    && !line[..*prev_end].ends_with(char::is_whitespace)
                 {
-                    *prev_end = chunk.end;
-                    i += 1;
+                    *prev_end += text.chars().next().map_or(0, char::len_utf8);
+                    if *prev_end == chunk.end {
+                        i += 1;
+                    } else {
+                        chunks[i].start = *prev_end;
+                    }
                     continue;
                 }
             }
@@ -297,6 +300,12 @@ mod tests {
     fn word_wrap_keeps_leading_indent() {
         let have = segments("\t\tfoo", WrapMode::Word, 4);
         assert_eq!(have, vec!["\t", "\t", "foo"]);
+    }
+
+    #[test]
+    fn word_wrap_moves_extra_spaces_to_the_next_row() {
+        let have = segments("foo   bar", WrapMode::Word, 5);
+        assert_eq!(have, vec!["foo ", "  bar"]);
     }
 
     #[test]
