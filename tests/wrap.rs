@@ -465,10 +465,7 @@ fn vertical_scroll_after_deleting_lines() {
     textarea.move_cursor(CursorMove::End);
 
     // When rendering to a 3x4 viewport, the last 4 lines should be seen
-    assert_eq!(
-        render_lines(&textarea, 3, 4),
-        ["3  ", "4  ", "5  ", "6  "]
-    );
+    assert_eq!(render_lines(&textarea, 3, 4), ["3  ", "4  ", "5  ", "6  "]);
 
     // Delete the last 2 lines (a number and a newline on each line)
     for _ in 0..4 {
@@ -476,8 +473,5 @@ fn vertical_scroll_after_deleting_lines() {
     }
 
     // The viewport should now show the first 4 remaining lines
-    assert_eq!(
-        render_lines(&textarea, 3, 4),
-        ["1  ", "2  ", "3  ", "4  "]
-    );
+    assert_eq!(render_lines(&textarea, 3, 4), ["1  ", "2  ", "3  ", "4  "]);
 }
