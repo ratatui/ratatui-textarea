@@ -456,3 +456,28 @@ fn wrapped_cursor_three_visual_lines_from_one_logical() {
     textarea.move_cursor(CursorMove::Up);
     assert_eq!(textarea.cursor(), (0, 0));
 }
+
+#[test]
+fn vertical_scroll_after_deleting_lines() {
+    // Create a basic 6-line textarea and put the cursor at the end
+    let mut textarea = TextArea::from(["1", "2", "3", "4", "5", "6"]);
+    textarea.move_cursor(CursorMove::Bottom);
+    textarea.move_cursor(CursorMove::End);
+
+    // When rendering to a 3x4 viewport, the last 4 lines should be seen
+    assert_eq!(
+        render_lines(&textarea, 3, 4),
+        ["3  ", "4  ", "5  ", "6  "]
+    );
+
+    // Delete the last 2 lines (a number and a newline on each line)
+    for _ in 0..4 {
+        textarea.delete_char();
+    }
+
+    // The viewport should now show the first 4 lines and 2 empty lines
+    assert_eq!(
+        render_lines(&textarea, 3, 4),
+        ["1  ", "2  ", "3  ", "4  "]
+    );
+}
